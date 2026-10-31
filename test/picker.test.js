@@ -18,7 +18,8 @@ test('picker classifies HAP UUIDs, both fan versions, direct Hue devices, and cu
   }
   for (const [type, category] of [['Lightbulb','lights'], ['Outlet','outlets'], ['HueGroup','groups'], ['Fanv2','fans'], ['CustomAction','other']]) assert.equal(pickerService(service({ source: 'hue', type })).category, category);
   assert.equal(PICKER_CATEGORIES.find(c => c.id === 'internal').defaultSelected, false);
-  assert.ok(PICKER_CATEGORIES.filter(c => c.id !== 'internal').every(c => c.defaultSelected));
+  assert.equal(PICKER_CATEGORIES.find(c => c.id === 'other').defaultSelected, false);
+  assert.ok(PICKER_CATEGORIES.filter(c => !['internal','other'].includes(c.id)).every(c => c.defaultSelected));
 });
 
 test('Harmony exclusion uses identity and platform, never display names or Logitech alone', () => {

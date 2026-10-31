@@ -11,7 +11,7 @@ Present selected real Hue devices and existing Homebridge accessories as one emu
 - Draft PR: https://github.com/pponce/homebridge-harmony-home-control/pull/1.
 - Published implementation commit: 9cd3d501563a8f83cec686e3711e1027bd24bdcd. A later handoff-only commit may be the branch head.
 - Base main commit: 7d145fc7f52b928589c16f5a11d7bfcff813a59f.
-- Package version: 0.1.0-alpha.4.
+- Package version: 0.1.0-alpha.5.
 - Working folder: /workspace/scratch/71d3a82dec8a/homebridge-harmony-home-control.
 - Local Git baseline imports the exact remote base tree a8ec23885dfbf248793572cbc2ce877dec5b5dcd; remote commits use the actual main commit as parent through the connected GitHub tools.
 
@@ -31,6 +31,10 @@ Present selected real Hue devices and existing Homebridge accessories as one emu
 - Hue editor label: Device name in Harmony. Roku editor label: Name Mapped Action. Saved cards show the requested Harmony Device Name / Harmony Selector / Mapped Action labels with the target characteristic and action.
 - Fix likely missed-click paths: startup buttons stay disabled until handlers are ready; editors open before discovery, remain open on empty/error responses, and update in place. Repeated Add clicks retain the draft and share discovery; synchronous handler errors are displayed. Existing saved mapping labels are resolved automatically on opening settings.
 - Existing mappings with dimming disabled stay disabled when edited.
+- Modern configuration UI follows the patterns reviewed in pponce/homebridge-roborock-matter-plus: separate settings panels, teal primary actions, semantic status pills, advanced disclosures, system fonts, and host-driven light/dark color tokens. Implemented independently; no reference assets or source files were copied into the package.
+- Header/navigation, connection panels, bridge cards, structured mapping details, editors, pairing status, and mobile layout were updated. Mapping names and labels remain as requested.
+- Persistent save bar tracks actual dirty state, saving, errors, and restart requirements. Host ready events initialize the UI once; tab navigation supports arrow/Home/End keys. Actions show busy state and keep drafts on discovery failures.
+- Other / custom is unchecked by default alongside Setup & maintenance, per the latest request.
 
 ## Validation
 
@@ -43,6 +47,7 @@ Present selected real Hue devices and existing Homebridge accessories as one emu
 - Publication to the existing private repository was explicitly authorized and completed. Ownership was verified against the authenticated pponce account after an automatic-review block. npm publication remains outside this approval. Main is unchanged; installation uses combined-hue-bridge.
 - Direct npm dependency and Playwright Chromium downloads both returned network-policy HTTP 403. Local dependency/IPC and browser validation remain blocked; no global installation or dependency patches were attempted.
 - Physical Hue/Harmony hardware has not been tested.
+- Alpha.5 local validation: 32 tests pass, one dependency/IPC test requires CI; new tests cover live host/OS theme precedence and readable text contrast in both palettes. The extended browser workflow covers ready events, keyboard navigation, custom exclusion, save failure/recovery, themes, and mobile save-bar visibility. Alpha.5 GitHub/browser checks are pending; the successful runs above cover alpha.4 only.
 
 ## Decisions and limits
 

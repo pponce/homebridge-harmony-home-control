@@ -1,74 +1,99 @@
 <link rel="stylesheet" href="style.css">
-<div class="hhc">
+<main class="hhc">
   <header class="intro">
-    <span class="eyebrow">YOUR REMOTE, MORE POSSIBILITIES</span>
-    <h2>Harmony Home Control</h2>
-    <p>Bring Hue lights and Homebridge accessories together on your Harmony remote.</p>
-    <div class="top-actions"><span id="runtime-badge" class="badge-status">Checking connection…</span><button id="save" class="btn btn-primary" type="button" disabled>Save settings</button></div>
-    <p id="loading-status" role="status" class="muted">Loading plugin settings…</p>
-    <div id="notice" role="status" aria-live="polite" hidden></div>
-    <div id="validation" role="alert" hidden></div>
-    <p id="restart-note" class="muted" hidden>Settings changed. Save, then restart this plugin’s bridge before using Harmony.</p>
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none"><rect x="15" y="5" width="18" height="38" rx="8"/><circle cx="24" cy="15" r="3"/><circle cx="24" cy="28" r="6"/><path d="M24 25v6m-3-3h6M21 37h6"/></svg></div>
+      <div><h1>Harmony Home Control</h1><p>One remote. Your connected home.</p></div>
+    </div>
+    <span id="runtime-badge" class="status-pill" role="status">Checking connection…</span>
   </header>
-  <nav class="steps" aria-label="Setup sections">
-    <button data-tab="connection" type="button" aria-current="page" data-ready disabled>1 · Connection</button>
-    <button data-tab="hue" type="button" data-ready disabled>2 · Home-control buttons</button>
-    <button data-tab="roku" type="button" data-ready disabled>3 · Other buttons</button>
-    <button data-tab="pair" type="button" data-ready disabled>4 · Connect Harmony</button>
+  <p id="loading-status" role="status" class="loading-note">Loading plugin settings…</p>
+
+  <nav class="steps" role="tablist" aria-label="Setup sections">
+    <button id="tab-connection" data-tab="connection" role="tab" aria-controls="panel-connection" aria-selected="true" type="button" data-ready disabled><span class="step-number" aria-hidden="true">01</span>Connection</button>
+    <button id="tab-hue" data-tab="hue" role="tab" aria-controls="panel-hue" aria-selected="false" tabindex="-1" type="button" data-ready disabled><span class="step-number" aria-hidden="true">02</span>Home control<span id="hue-count" class="count" aria-hidden="true">0</span></button>
+    <button id="tab-roku" data-tab="roku" role="tab" aria-controls="panel-roku" aria-selected="false" tabindex="-1" type="button" data-ready disabled><span class="step-number" aria-hidden="true">03</span>Other buttons<span id="roku-count" class="count" aria-hidden="true">0</span></button>
+    <button id="tab-pair" data-tab="pair" role="tab" aria-controls="panel-pair" aria-selected="false" tabindex="-1" type="button" data-ready disabled><span class="step-number" aria-hidden="true">04</span>Connect Harmony</button>
   </nav>
-  <section id="panel-connection">
-    <h3>Connect your hub</h3>
-    <p>Use the LAN addresses of this Homebridge machine and your Harmony hub. Reserve these addresses in your router so they stay the same.</p>
-    <div class="form-grid">
-      <label>Homebridge LAN address<select id="address" aria-label="Homebridge LAN address" class="form-control"><option value="">Choose a network interface</option></select></label>
-      <label>Harmony hub IPv4 address <span class="muted">(required)</span><input id="hubs" class="form-control" placeholder="Enter your hub’s IP address" aria-describedby="hub-address-help" autocomplete="off" required><small id="hub-address-help">Enter this address manually. The hub is not detected automatically. Separate multiple addresses with commas. Only these addresses may send commands.</small></label>
-    </div>
-    <div class="choice-grid">
-      <label class="choice"><input id="hue-enabled" type="checkbox"><span><strong>Dedicated home-control buttons</strong><small>Emulate a Hue bridge for the light/plug buttons and dimming rocker.</small></span></label>
-      <label class="choice"><input id="roku-enabled" type="checkbox"><span><strong>Other remote buttons</strong><small>Emulate a Roku for spare buttons inside your existing activities.</small></span></label>
-    </div>
-    <details><summary>Network ports and separate VLANs</summary>
-      <div class="form-grid"><label>Hue HTTP port<input id="hue-port" type="number" min="1" max="65535" class="form-control"></label><label>Roku HTTP port<input id="roku-port" type="number" min="1" max="65535" class="form-control"></label></div>
-      <p>Discovery uses SSDP on UDP 1900. If Harmony and Homebridge are on different VLANs, ordinary mDNS forwarding is insufficient. Use an SSDP relay or the discovery helper in this plugin’s README, and allow your hub to reach the HTTP ports.</p>
-      <p>For Docker, use host networking. Hue defaults to 18080 to avoid existing web servers; Harmony compatibility with that port needs testing on your hub. Port 80 is configurable if needed.</p>
-    </details>
-    <div class="section-head"><div><h3>Real Hue bridges <small class="muted">· Optional</small></h3><p>Connect your physical Hue bridges to control their lights, plugs, and groups alongside Homebridge accessories.</p></div><button id="add-real-hue" class="btn btn-outline-primary" type="button" data-ready disabled>Add Hue bridge</button></div>
-    <p class="muted">Connect a square Hue Bridge or Hue Bridge Pro, then choose its devices in either button editor. They are available directly from Hue without adding HomeKit accessories.</p>
-    <div id="real-hue-list" class="mapping-list"></div><div id="real-hue-editor" class="editor" hidden></div>
-    <div class="section-head"><h3>Your accessories</h3><button id="refresh" class="btn btn-outline-primary" type="button" data-ready disabled>Find accessories</button></div>
-    <p id="discovery-status" class="muted">Find accessories before creating your first mapping.</p>
-    <div id="access-help" class="callout" hidden>For Homebridge devices, accessory control must be enabled (the <code>-I</code> option). If the Homebridge UI’s Accessories page works, this is usually already enabled. Child bridges are discovered automatically. Direct Hue connections work independently. Other accessories paired directly to Apple Home are not included.</div>
-    <div id="hue-warning" class="callout" hidden></div>
+
+  <section id="panel-connection" class="tab-panel" role="tabpanel" aria-labelledby="tab-connection">
+    <section class="panel">
+      <div class="section-head"><div><h2>Connection</h2><p>Choose where Homebridge listens and which Harmony hubs can control your devices.</p></div><span class="pill">Local network</span></div>
+      <div class="form-grid">
+        <label class="field"><span>Homebridge LAN address</span><select id="address" aria-label="Homebridge LAN address" class="form-control" data-ready disabled><option value="">Choose a network interface</option></select><small>The interface your Harmony hub can reach.</small></label>
+        <label class="field"><span>Harmony hub IPv4 address <span class="required">Required</span></span><input id="hubs" class="form-control" placeholder="Enter your hub’s IP address" aria-label="Harmony hub IPv4 address" aria-describedby="hub-address-help" autocomplete="off" required data-ready disabled><small id="hub-address-help">Enter it manually; this field is not auto-detected. Separate multiple addresses with commas.</small></label>
+      </div>
+      <div class="choice-grid">
+        <label class="choice"><input id="hue-enabled" type="checkbox" data-ready disabled><span><strong>Home-control buttons</strong><small>Use the dedicated light/plug buttons and dimming rocker through the combined Hue bridge.</small></span><span class="pill" aria-hidden="true">Hue</span></label>
+        <label class="choice"><input id="roku-enabled" type="checkbox" data-ready disabled><span><strong>Other remote buttons</strong><small>Assign accessory actions to spare buttons inside your Harmony activities.</small></span><span class="pill" aria-hidden="true">Roku</span></label>
+      </div>
+      <details class="advanced-settings"><summary>Network ports &amp; separate VLANs</summary>
+        <div class="form-grid"><label class="field"><span>Hue HTTP port</span><input id="hue-port" type="number" min="1" max="65535" class="form-control" data-ready disabled></label><label class="field"><span>Roku HTTP port</span><input id="roku-port" type="number" min="1" max="65535" class="form-control" data-ready disabled></label></div>
+        <p>Discovery uses SSDP on UDP 1900. Across VLANs, use an SSDP relay or the discovery helper in the README, and allow your hub to reach these HTTP ports. Ordinary mDNS forwarding is insufficient.</p>
+        <p>For Docker, use host networking. Hue defaults to 18080; port 80 is configurable if your Harmony hub requires it. Reserve your devices’ IP addresses in your router.</p>
+      </details>
+    </section>
+
+    <section class="panel">
+      <div class="section-head"><div><h2>Real Hue bridges <span class="optional">Optional</span></h2><p>Add one or more physical bridges. Choose their devices alongside Homebridge accessories.</p></div><button id="add-real-hue" class="btn btn-primary" type="button" data-ready disabled>Add Hue bridge</button></div>
+      <div id="real-hue-editor" class="editor" hidden></div>
+      <div id="real-hue-list" class="mapping-list"></div>
+      <p class="section-note">Supports the square Hue Bridge and Hue Bridge Pro. Each bridge is authorized with its physical button.</p>
+    </section>
+
+    <section class="panel">
+      <div class="section-head"><div><h2>Accessory discovery</h2><p>Find the controls you want to use in your mappings.</p></div><button id="refresh" class="btn btn-outline-primary" type="button" data-ready disabled>Find accessories</button></div>
+      <p id="discovery-status" class="discovery-summary" role="status">Your accessories will appear here after discovery.</p>
+      <div id="access-help" class="callout" hidden>For Homebridge devices, accessory control must be enabled (the <code>-I</code> option). If the Homebridge UI’s Accessories page works, this is usually already enabled. Child bridges are discovered automatically. Direct Hue connections work independently. Other accessories paired directly to Apple Home are not included.</div>
+      <div id="hue-warning" class="callout warning" hidden></div>
+    </section>
   </section>
-  <section id="panel-hue" hidden>
-    <div class="section-head"><div><h3>Dedicated home-control buttons</h3><p>Each entry becomes a virtual Hue light that Harmony can assign to a home-control button.</p></div><button id="add-hue" class="btn btn-primary" type="button" data-ready disabled>Expose an accessory</button></div>
-    <p class="callout">A short press sends On; a long press sends Off. Dimming is optional. Harmony sees one combined bridge containing the Hue and Homebridge devices you choose here.</p>
-    <div id="hue-list" class="mapping-list"></div><div id="hue-editor" class="editor" hidden></div>
+
+  <section id="panel-hue" class="tab-panel" role="tabpanel" aria-labelledby="tab-hue" hidden>
+    <section class="panel">
+      <div class="section-head"><div><h2>Home-control buttons</h2><p>Choose the devices Harmony shows for its dedicated light and plug buttons.</p></div><button id="add-hue" class="btn btn-primary" type="button" data-ready disabled>Expose an accessory</button></div>
+      <div class="callout compact"><strong>Short press → On</strong><span>Long press → Off · Optional dimming</span><small>Selected Hue and Homebridge devices appear together through one bridge.</small></div>
+      <div id="hue-editor" class="editor" hidden></div>
+      <div id="hue-list" class="mapping-list"></div>
+    </section>
   </section>
-  <section id="panel-roku" hidden>
-    <div class="section-head"><div><h3>Other remote buttons</h3><p>Choose a Roku command and the accessory action it should trigger. You assign the physical button in Harmony.</p></div><button id="add-roku" class="btn btn-primary" type="button" data-ready disabled>Add a button action</button></div>
-    <p class="callout">For example: assign a spare Harmony button to Roku <strong>Play</strong>, then map Play here to an accessory’s On control. One virtual Roku supports several actions.</p>
-    <div id="roku-list" class="mapping-list"></div><div id="roku-editor" class="editor" hidden></div>
+
+  <section id="panel-roku" class="tab-panel" role="tabpanel" aria-labelledby="tab-roku" hidden>
+    <section class="panel">
+      <div class="section-head"><div><h2>Other remote buttons</h2><p>Map a Roku command to an accessory action, then assign that command to a button in Harmony.</p></div><button id="add-roku" class="btn btn-primary" type="button" data-ready disabled>Add a button action</button></div>
+      <div class="callout compact"><strong>Your Harmony button → Roku Play → Your chosen action</strong><small>One virtual Roku supports several actions. Assign the physical buttons within your Harmony activities.</small></div>
+      <div id="roku-editor" class="editor" hidden></div>
+      <div id="roku-list" class="mapping-list"></div>
+    </section>
   </section>
-  <section id="panel-pair" hidden>
-    <h3>Connect Harmony</h3>
-    <p>Save your settings and restart this plugin’s bridge first. The checks below show the running configuration.</p>
-    <div id="status-details" class="callout"></div>
+
+  <section id="panel-pair" class="tab-panel" role="tabpanel" aria-labelledby="tab-pair" hidden>
+    <section class="panel">
+      <div class="section-head"><div><h2>Connect Harmony</h2><p>Save your settings and restart this plugin’s bridge before pairing.</p></div><button id="refresh-status" type="button" class="btn btn-outline-primary" data-ready disabled>Refresh status</button></div>
+      <div id="status-details" class="runtime-details"></div>
+    </section>
     <div class="pair-grid">
-      <article><h4>Home-control buttons · Hue</h4>
-        <ol><li>Choose Hue or Homebridge devices on the Home-control buttons tab.</li><li>In Harmony, add a home-control device and discover this plugin’s combined Philips Hue bridge. If Harmony already uses a physical Hue bridge, replace that connection in Harmony first.</li><li>When Harmony asks for the Hue link button, select <strong>Open pairing window</strong> below. Pairing stays open for two minutes.</li><li>Import the lights. In Harmony’s Remote &amp; Hub settings, open Button Customization → Home Control Buttons and assign them.</li></ol>
-        <button id="pair" type="button" class="btn btn-primary" disabled>Open pairing window</button><p id="pair-status" role="status" class="muted"></p>
-        <details><summary>If Harmony cannot finish pairing</summary><p>Try MyHarmony desktop with the remote connected by USB, then Scan for Devices. Mobile pairing varies between Harmony versions. Check network discovery and HTTP access before changing AV settings.</p></details>
-        <p class="muted">Harmony permits one Hue bridge. Its existing Hue button and activity assignments may need to be recreated. Physical Hue bridge connections to Apple Home and the Hue app can stay in place. Scenes and color control are not provided.</p>
+      <article class="panel pair-card"><div class="section-head"><h3>Home-control buttons</h3><span class="pill">Hue</span></div>
+        <ol><li>Choose Hue or Homebridge devices on the Home control tab.</li><li>In Harmony, discover this plugin’s combined Philips Hue bridge. Replace an existing physical Hue bridge connection in Harmony first.</li><li>When Harmony asks for the link button, select <strong>Open pairing window</strong> below.</li><li>Import the lights, then assign them under Remote &amp; Hub → Button Customization → Home Control Buttons.</li></ol>
+        <button id="pair" type="button" class="btn btn-primary" disabled>Open pairing window</button><p id="pair-status" role="status" class="section-note"></p>
+        <details class="advanced-settings"><summary>Pairing help &amp; existing Hue setups</summary><p>The pairing window lasts two minutes. If mobile pairing fails, try MyHarmony desktop with the remote connected over USB, then Scan for Devices.</p><p>Harmony supports one Hue bridge. Replacing its existing connection may require recreating Hue button and activity assignments. Physical bridges can stay connected to Apple Home and the Hue app. Scenes and color control are not provided.</p></details>
       </article>
-      <article><h4>Other buttons · Roku</h4>
-        <ol><li>In Harmony, scan your network for entertainment devices and add the discovered Roku. Its serial number starts with HHC.</li><li>Rename it to <strong>Homebridge Controls</strong> in Harmony.</li><li>Add it to each activity where you want these commands.</li><li>Open Activity Control Buttons, pick a physical button, then assign the Roku command shown in your mapping.</li><li>Sync your remote, start that activity, and press the button. Check Recent commands below.</li></ol>
-        <p class="muted">The plugin cannot change Harmony’s button assignments. Short and long presses can send different Roku commands when configured in Harmony. Home-control buttons use the Hue interface.</p>
+      <article class="panel pair-card"><div class="section-head"><h3>Other buttons</h3><span class="pill">Roku</span></div>
+        <ol><li>Scan your network in Harmony and add the discovered Roku. Its serial starts with HHC.</li><li>Rename it to <strong>Homebridge Controls</strong> in Harmony.</li><li>Add it to each activity where you want these commands.</li><li>Under Activity Control Buttons, assign the Roku command shown in your mapping.</li><li>Sync the remote, start that activity, and press the button.</li></ol>
+        <p class="section-note">Configure short and long presses in Harmony using different commands. Dedicated home-control buttons use the Hue interface.</p>
       </article>
     </div>
-    <div class="section-head"><h3>Recent commands</h3><button id="refresh-status" class="btn btn-outline-primary" type="button" data-ready disabled>Refresh status</button></div>
-    <p class="muted">These are commands received by the running proxy. Tests in the editor act directly on the accessory.</p>
-    <div id="events" aria-live="polite"></div>
+    <section class="panel">
+      <div class="section-head"><div><h2>Recent commands</h2><p>Commands received from Harmony. Editor tests send commands directly to an accessory.</p></div></div>
+      <div id="events" aria-live="polite"></div>
+    </section>
   </section>
-</div>
+
+  <footer class="save-bar">
+    <div><strong id="save-state" role="status">Loading settings…</strong><small id="restart-note" hidden>Restart this plugin’s bridge after saving to apply your changes.</small></div>
+    <button id="save" class="btn btn-primary" type="button" disabled>Save settings</button>
+  </footer>
+  <div class="feedback-stack"><div id="notice" class="feedback success" role="status" aria-live="polite" hidden></div><div id="validation" class="feedback error" role="alert" hidden></div></div>
+</main>
+<script src="theme.js"></script>
 <script src="app.js"></script>

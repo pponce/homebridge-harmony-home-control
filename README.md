@@ -50,6 +50,8 @@ On an `hb-service` installation, package the checkout and install the tarball wi
 
 Open **Plugins → Harmony Home Control → Settings**. If the platform has never been configured, save its connection settings and restart Homebridge so the platform can start. A child bridge is supported and recommended for isolating restarts. This proxy has no accessories to pair with Apple Home.
 
+Settings follow Homebridge’s light or dark theme and adapt to mobile screens. The four tabs organize connections, home-control mappings, other-button mappings, and Harmony pairing. The save bar shows unsaved changes, save progress, and when a restart is needed. Finish or cancel an open editor before saving. Advanced network options are available in the expandable connection panel.
+
 ## Guided setup
 
 ### 1. Connection
@@ -67,7 +69,7 @@ The combined picker includes Homebridge main/child-bridge services and the conne
 
 Both mapping editors combine **Find an accessory**, **Device source**, and **Accessory types** checkboxes. Types include light bulbs, locks, switches, outlets, fans, blinds/curtains, doors/garages, climate controls, TVs/speakers, water/irrigation, security systems, Hue groups, and custom controls. Counts reflect the current search, source, and Harmony inclusion setting. Use **Clear types** to select just a few, **All types** to include maintenance services, or **Default types** to restore the usual device types.
 
-Accessories from `homebridge-harmony` are hidden by default because Harmony already controls them. Enable **Include homebridge-harmony accessories** to select one deliberately. Identification uses that plugin’s Harmony manufacturer metadata or its dedicated child-bridge platform, not accessory display names or the Logitech manufacturer alone. **Setup & maintenance** services, including input configuration, filter resets, camera setup, and bridge management, are also unchecked by default. Unknown custom controls remain available. Devices are not automatically removed just because they are temporarily unavailable.
+Accessories from `homebridge-harmony` are hidden by default because Harmony already controls them. Enable **Include homebridge-harmony accessories** to select one deliberately. Identification uses that plugin’s Harmony manufacturer metadata or its dedicated child-bridge platform, not accessory display names or the Logitech manufacturer alone. **Setup & maintenance** services, including input configuration, filter resets, camera setup, and bridge management, are unchecked by default. **Other / custom** is also unchecked; select it to include custom controls. Devices are not automatically removed just because they are temporarily unavailable.
 
 Naming and identification properties such as **Configured Name** and **Identify** are excluded from new actions. Configured Name renames an accessory; it is not a power command. Services with no supported action controls do not appear in new selections. Filters affect the picker only: existing mappings continue to work, and an existing selection outside the filters stays visible with an explanation. Existing metadata mappings remain editable with a notice so they are not silently changed.
 

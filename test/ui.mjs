@@ -11,10 +11,10 @@ const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const root = fileURLToPath(new URL('../',import.meta.url)), publicDir = join(root,'homebridge-ui','public');
 const artifacts = join(root,'local-work','artifacts'); await mkdir(artifacts,{ recursive: true });
 const server = createServer(async (request,response) => {
-  const names = { '/': 'index.html','/app.js': 'app.js','/style.css': 'style.css' }; const file = names[request.url];
+  const names = { '/': 'index.html','/app.js': 'app.js','/theme.js': 'theme.js','/style.css': 'style.css' }; const file = names[request.url];
   if (!file) { response.writeHead(404); response.end(); return; }
   const content = await readFile(join(publicDir,file),'utf8'); response.writeHead(200,{ 'Content-Type': (file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html') + '; charset=utf-8' });
-  response.end(file === 'index.html' ? `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:system-ui;background:#fff;color:#263238;margin:12px}.form-control{box-sizing:border-box;width:100%;border:1px solid #bbb;border-radius:5px;padding:8px;background:transparent;color:inherit}.btn{border:1px solid #246b65;border-radius:5px;padding:8px 12px;background:transparent;cursor:pointer;color:inherit}.btn-primary{background:#246b65;color:white}.btn:disabled{opacity:.5}button{font:inherit}*{box-sizing:border-box}</style></head><body>${content}</body></html>` : content);
+  response.end(file === 'index.html' ? `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>${content}</body></html>` : content);
 });
 const port = await listen(server,0,'127.0.0.1');
 const on = '00000025-0000-1000-8000-0026BB765291', brightness = '00000008-0000-1000-8000-0026BB765291', configuredName = '000000E3-0000-1000-8000-0026BB765291';
@@ -30,10 +30,11 @@ const switchService = makeService(5,'Harmony room switch','Switch',{ manufacture
 const fanService = makeService(6,'Ceiling fan','Fanv2');
 const lockService = makeService(7,'Front door','LockMechanism');
 const metadataService = makeService(8,'HDMI input','InputSource',{ characteristics: [structuredClone(service.characteristics[2])] });
-const homebridgeServices = [service,harmonyService,internalService,switchService,fanService,lockService,metadataService];
+const customService = makeService(9,'Custom button','CustomAction');
+const homebridgeServices = [service,harmonyService,internalService,switchService,fanService,lockService,metadataService,customService];
 const realBridge = { id: '001788FFFE123456', host: '192.168.1.20', name: 'Living room bridge' };
 const hueService = { ...structuredClone(service), id: `hue/${realBridge.id}/lights/unique-light`, source: 'hue', hueBridge: realBridge.id, bridge: realBridge.id, bridgeName: 'Hue · Living room bridge', name: 'Hue desk lamp' };
-let draft, saved, tests = [], runningHash, pairingAttempts = 0, discoveryCalls = 0, finishFirstDiscovery;
+let draft, saved, tests = [], runningHash, pairingAttempts = 0, discoveryCalls = 0, finishFirstDiscovery, failNextSave = false;
 const firstDiscovery = new Promise(resolve => { finishFirstDiscovery = resolve; });
 const browser = await chromium.launch({ headless: true,args: ['--no-sandbox'] });
 let page;
@@ -60,12 +61,29 @@ try {
     throw new Error(`Unknown UI request ${path}`);
   });
   await page.exposeFunction('updateConfig',async config => { draft = structuredClone(config[0]); });
-  await page.exposeFunction('saveConfig',async () => { saved = structuredClone(draft); });
-  await page.addInitScript(() => { window.homebridge = { getPluginConfig: async () => [{ _bridge: { username: 'AA:00:00:00:00:01' } }],request: (path,body) => window.bridgeRequest(path,body),updatePluginConfig: value => window.updateConfig(value),savePluginConfig: () => window.saveConfig(),disableSaveButton() {},enableSaveButton() {} }; });
+  await page.exposeFunction('saveConfig',async () => { if (failNextSave) { failNextSave = false; throw new Error('Save failed for test'); } saved = structuredClone(draft); });
+  await page.addInitScript(() => { window.homebridge = {
+    getPluginConfig: async () => { window.configLoadCount = (window.configLoadCount || 0) + 1; return [{ _bridge: { username: 'AA:00:00:00:00:01' } }]; },
+    request: (path,body) => window.bridgeRequest(path,body),updatePluginConfig: value => window.updateConfig(value),savePluginConfig: () => window.saveConfig(),disableSaveButton() {},enableSaveButton() {},
+    addEventListener: (event,listener) => { if (event === 'ready') setTimeout(() => { listener(); listener(); },50); },
+  }; });
   await page.goto(`http://127.0.0.1:${port}`); await page.waitForSelector('#address option[value="192.168.1.2"]',{ state: 'attached' });
+  assert.equal(await page.evaluate(() => window.configLoadCount),1, 'Repeated host ready events must not reset the draft');
   assert.equal(await page.locator('#save').isDisabled(),true);
+  await page.emulateMedia({ colorScheme: 'dark' }); await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
+  await page.evaluate(() => document.body.className = 'config-ui-x-light'); await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
+  assert.equal(await page.evaluate(() => getComputedStyle(document.body).backgroundColor),'rgb(244, 246, 248)');
+  await page.evaluate(() => document.body.classList.add('dark-mode')); await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
+  assert.equal(await page.evaluate(() => getComputedStyle(document.body).backgroundColor),'rgb(28, 28, 28)');
+  await page.screenshot({ path: join(artifacts,'ui-modern-connection-dark.png'),fullPage: true });
+  await page.evaluate(() => document.body.className = 'config-ui-x-light'); await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
+  await page.locator('#tab-connection').focus(); await page.keyboard.press('ArrowRight');
+  assert.equal(await page.locator('#tab-hue').getAttribute('aria-selected'),'true'); assert.equal(await page.locator('#panel-hue').isVisible(),true);
+  await page.keyboard.press('Home'); assert.equal(await page.locator('#panel-connection').isVisible(),true);
   await page.locator('#address').selectOption('192.168.1.2'); await page.locator('#hubs').fill('192.168.1.3'); await page.locator('#hubs').dispatchEvent('change');
   await page.waitForFunction(() => !document.getElementById('save').disabled);
+  assert.equal(await page.locator('#save-state').textContent(),'Unsaved changes');
+  await page.screenshot({ path: join(artifacts,'ui-modern-connection-light.png'),fullPage: true });
   // The first click opens the editor even while discovery is slow or returns no devices.
   await page.locator('[data-tab="roku"]').click(); await page.locator('#add-roku').click();
   let editor = page.locator('#roku-editor'); assert.equal(await editor.isVisible(),true);
@@ -76,7 +94,7 @@ try {
   finishFirstDiscovery(); await editor.getByRole('button',{ name: 'Refresh accessory list',exact: true }).waitFor();
   assert.equal(await editor.isVisible(),true, 'An empty discovery must leave the editor open');
   await editor.getByRole('button',{ name: 'Refresh accessory list',exact: true }).click();
-  await page.waitForFunction(() => document.getElementById('discovery-status').textContent.startsWith('6 controllable'));
+  await page.waitForFunction(() => document.getElementById('discovery-status').textContent.startsWith('7 controllable'));
   assert.equal(await editor.getByLabel('Accessory',{ exact: true }).locator('option').count(),5);
   await editor.getByRole('button',{ name: 'Cancel',exact: true }).click();
   assert.match(await page.locator('#hue-warning').textContent(),/automatic bridge discovery/);
@@ -85,6 +103,9 @@ try {
   const options = () => editor.getByLabel('Accessory',{ exact: true }).locator('option').evaluateAll(items => items.map(item => item.value).filter(Boolean));
   assert.deepEqual(await options(),[service.id,switchService.id,fanService.id,lockService.id]);
   assert.equal(await editor.getByLabel('Setup & maintenance',{ exact: true }).isChecked(),false);
+  assert.equal(await editor.getByLabel('Other / custom',{ exact: true }).isChecked(),false);
+  await editor.getByLabel('Other / custom',{ exact: true }).check(); assert.ok((await options()).includes(customService.id));
+  await editor.getByLabel('Other / custom',{ exact: true }).uncheck(); assert.ok(!(await options()).includes(customService.id));
   await editor.getByRole('button',{ name: 'Clear types',exact: true }).click(); assert.deepEqual(await options(),[]);
   await editor.getByLabel('Locks',{ exact: true }).check(); assert.deepEqual(await options(),[lockService.id]);
   await editor.getByLabel('Fans',{ exact: true }).check(); assert.deepEqual(await options(),[fanService.id,lockService.id]);
@@ -144,7 +165,12 @@ try {
   assert.match(await page.locator('#roku-list').textContent(),/Harmony Selector: Roku device Play/);
   assert.match(await page.locator('#roku-list').textContent(),/Mapped Action: Reading lamp : Toggle On/);
   assert.equal(draft._bridge.username,'AA:00:00:00:00:01');
+  failNextSave = true; await page.locator('#save').click();
+  await page.waitForFunction(() => document.getElementById('validation').textContent.includes('Save failed for test'));
+  assert.equal(await page.locator('#save').isDisabled(),false); assert.equal(await page.locator('#save-state').textContent(),'Unsaved changes'); assert.equal(saved,undefined);
   await page.locator('#save').click(); await page.waitForFunction(() => document.getElementById('notice').textContent.startsWith('Settings saved'));
+  await page.waitForFunction(() => document.getElementById('save-state').textContent.includes('restart needed'));
+  assert.equal(await page.locator('#save').isDisabled(),true); assert.match(await page.locator('#save-state').textContent(),/restart needed/);
   assert.equal(saved.hueDevices.length,2); assert.equal(saved.rokuButtons.length,1); assert.equal(saved.hueBridges.length,1);
   assert.ok(!JSON.stringify(saved).includes('apiKey'));
   runningHash = configHash(saved); await page.locator('[data-tab="pair"]').click(); await page.waitForFunction(() => !document.getElementById('pair').disabled);
@@ -165,6 +191,10 @@ try {
   await page.locator('[data-tab="roku"]').click(); await page.locator('#add-roku').click();
   await page.screenshot({ path: join(artifacts,'ui-filters-mobile.png'),fullPage: true });
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),'Accessory type filters must fit on mobile');
+  await page.evaluate(() => document.body.classList.add('dark-mode')); await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
+  await page.screenshot({ path: join(artifacts,'ui-modern-filters-mobile-dark.png'),fullPage: true });
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),'Dark mobile editor must not overflow horizontally');
+  const saveBox = await page.locator('.save-bar').boundingBox(); assert.ok(saveBox.y >= 0 && saveBox.y + saveBox.height <= 845,'Save bar stays visible while editing on mobile');
   editor = page.locator('#roku-editor');
   await editor.getByLabel('Include homebridge-harmony accessories',{ exact: true }).check();
   await editor.getByLabel('Accessory',{ exact: true }).selectOption(harmonyService.id);
@@ -176,7 +206,7 @@ try {
   assert.match(await editor.textContent(),/mapping is preserved/);
   await editor.getByRole('button',{ name: 'Update mapping',exact: true }).click(); await page.waitForFunction(() => !document.getElementById('save').disabled);
   assert.deepEqual(draft.rokuButtons.at(-1),harmonyMapping);
-  assert.deepEqual(errors,[]); console.log('UI passed: first-click editor with slow/empty discovery, discovery deduplication, type/source/search filters, Harmony and maintenance exclusions, metadata controls, preserved mappings, physical Hue pairing/retry, combined mappings, saved child-bridge settings, pairing status, escaping, and mobile layout.');
+  assert.deepEqual(errors,[]); console.log('UI passed: Homebridge ready lifecycle, live host/system themes, keyboard tabs, dirty/saving/error states, first-click editor with slow/empty discovery, type/source/search filters, Harmony/custom/maintenance exclusions, preserved mappings, physical Hue pairing/retry, saved child-bridge settings, labels, escaping, and mobile layout with persistent save controls.');
 } catch (error) {
   if (page) { await page.screenshot({ path: join(artifacts,'ui-failure.png'),fullPage: true }); console.error('Browser state at failure:',(await page.locator('body').innerText()).slice(0,8000)); }
   throw error;
