@@ -20,7 +20,7 @@
     <p>Use the LAN addresses of this Homebridge machine and your Harmony hub. Reserve these addresses in your router so they stay the same.</p>
     <div class="form-grid">
       <label>Homebridge LAN address<select id="address" aria-label="Homebridge LAN address" class="form-control"><option value="">Choose a network interface</option></select></label>
-      <label>Harmony hub IPv4 address<input id="hubs" class="form-control" placeholder="192.168.1.50" autocomplete="off"><small>Separate multiple hubs with commas. Only these addresses may send commands.</small></label>
+      <label>Harmony hub IPv4 address <span class="muted">(required)</span><input id="hubs" class="form-control" placeholder="Enter your hub’s IP address" aria-describedby="hub-address-help" autocomplete="off" required><small id="hub-address-help">Enter this address manually. The hub is not detected automatically. Separate multiple addresses with commas. Only these addresses may send commands.</small></label>
     </div>
     <div class="choice-grid">
       <label class="choice"><input id="hue-enabled" type="checkbox"><span><strong>Dedicated home-control buttons</strong><small>Emulate a Hue bridge for the light/plug buttons and dimming rocker.</small></span></label>
