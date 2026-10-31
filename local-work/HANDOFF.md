@@ -9,7 +9,7 @@ Present selected real Hue devices and existing Homebridge accessories as one emu
 - Repository: https://github.com/pponce/homebridge-harmony-home-control
 - Feature branch: combined-hue-bridge.
 - Draft PR: https://github.com/pponce/homebridge-harmony-home-control/pull/1.
-- Published implementation: the alpha.7 filter and project-icon commit on combined-hue-bridge. Resolve the branch head for its SHA; the preceding alpha.6 release was 075c4deb73b07f73140d92a1ac289fd308a09e6f.
+- Published implementation: alpha.7 at 4cae4a41cd46d1f815225a3fa2bd199e6bf66cd1 on combined-hue-bridge. A subsequent documentation-only commit refreshes the README and adds linked guides; the runtime version remains alpha.7.
 - Base main commit: 7d145fc7f52b928589c16f5a11d7bfcff813a59f.
 - Package version: 0.1.0-alpha.7.
 - Working folder: /workspace/scratch/71d3a82dec8a/homebridge-harmony-home-control.
@@ -42,6 +42,7 @@ Present selected real Hue devices and existing Homebridge accessories as one emu
 - Device Source Filter and Accessory types Filter are native keyboard-accessible disclosures, collapsed by default in each new editor. Header summaries show active selections. Discovery refreshes and collapsing preserve current filters, and sources unchecked before discovery stay unchecked when their bridges arrive. Existing selected targets remain pinned outside filters.
 - Search is immediately above the Accessory chooser. Source/type counts reflect the other filters. Other / custom and setup types remain unchecked by default; Harmony opt-in is inside Device Source Filter.
 - Project icons are in assets/icon-large.png (1024 square) and assets/icon-small.png (128 square), displayed and linked from the README and included in the package. Built-in image generation produced a white remote/home mark on opaque teal; ImageMagick only resized and stripped metadata. The exact prompt/export manifest is local-work/icon-assets.json. The configuration UI header artwork is unchanged.
+- README now has a centered brand header, short benefit-led introduction, button ideas, compact setup and compatibility sections, expandable details, and clear guide links. The tone is lighter; the alpha/hardware status and Harmony single-Hue-bridge limit remain visible. Detailed public guidance is preserved in docs/setup.md, docs/network.md, docs/troubleshooting.md, and docs/development.md, included in the package. No runtime changes or version bump were needed.
 
 ## Validation
 
@@ -57,6 +58,7 @@ Present selected real Hue devices and existing Homebridge accessories as one emu
 - Alpha.6 local syntax/JSON validation, 32 tests, git diff whitespace checks, and packaging pass; the same dependency/IPC test is skipped locally. The existing browser workflow runs on publication; see checks on the alpha.6 branch head for its result. No new runtime code or tests were added.
 - Alpha.6 Node 22/24/26 and browser checks passed at 075c4deb73b07f73140d92a1ac289fd308a09e6f (workflow runs 41224404269 and 41224408009).
 - Alpha.7 local syntax/JSON checks and 32 tests pass with the same dependency/IPC skip. Browser coverage now includes default-collapsed disclosures in both editors, source selections before discovery, two independently selected child bridges, partial group state, source/type/search intersection, refresh/collapse preservation, search immediately above Accessory, pinned saved mappings, and collapsed/expanded mobile layouts. See the alpha.7 branch checks for the CI result.
+- Alpha.7 Node 22/24/26 and browser checks passed at 4cae4a41cd46d1f815225a3fa2bd199e6bf66cd1 (workflow runs 41225912423 and 41225917543). README refresh validation passed for 34 local links/images/anchors, all five documents rendered with balanced HTML and code fences, install-script syntax, and package inclusion of all four guides and both icons. Working notes and tests remain excluded from the package. No new tests were added for the documentation change.
 
 ## Decisions and limits
 
