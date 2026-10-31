@@ -23,8 +23,9 @@ const service = { id: 'AA:BB:CC:DD:EE:FF/2/10',name: 'Reading lamp',bridge: 'AA:
 ] };
 let draft, saved, tests = [], runningHash;
 const browser = await chromium.launch({ headless: true,args: ['--no-sandbox'] });
+let page;
 try {
-  const page = await browser.newPage({ viewport: { width: 1000,height: 900 } }); const errors = []; page.on('pageerror',error => errors.push(error.message));
+  page = await browser.newPage({ viewport: { width: 1000,height: 900 } }); const errors = []; page.on('pageerror',error => { errors.push(error.message); console.error('Browser error:',error.message); });
   await page.exposeFunction('bridgeRequest',async (path,body) => {
     if (path === '/bootstrap') return { addresses: [{ name: 'eth0',address: '192.168.1.2' }],huePlatforms: [{ name: 'Hue',hosts: [] }] };
     if (path === '/validate') return { hash: configHash(validateConfig(body)) };
@@ -71,4 +72,7 @@ try {
   await page.screenshot({ path: join(artifacts,'ui-roku-mobile.png'),fullPage: true });
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),'Mobile UI must not overflow horizontally');
   assert.deepEqual(errors,[]); console.log('UI passed: connection validation, discovery, Hue mapping/edit/test, Roku mapping, saved bridge settings, pairing status, escaping, and mobile layout.');
+} catch (error) {
+  if (page) { await page.screenshot({ path: join(artifacts,'ui-failure.png'),fullPage: true }); console.error('Browser state at failure:',(await page.locator('body').innerText()).slice(0,8000)); }
+  throw error;
 } finally { await browser.close(); await closeServer(server); }
