@@ -106,7 +106,7 @@
     let selectedId = kind === 'hue' ? original?.serviceId : original?.action.serviceId;
     function fillServices() {
       const old = serviceSelect.value || selectedId; serviceSelect.replaceChildren(); option(serviceSelect,'','Choose an accessory');
-      for (const s of services.filter(s => `${s.name} ${s.type}`.toLowerCase().includes(filter.value.toLowerCase()) || s.id === old)) option(serviceSelect,s.id,`${s.name} · ${readable(s.type)} · ${s.bridge.slice(-5)}${s.reachable ? '' : ' · unavailable'}`);
+      for (const s of services.filter(s => `${s.name} ${s.type} ${s.bridgeName || ''}`.toLowerCase().includes(filter.value.toLowerCase()) || s.id === old)) option(serviceSelect,s.id,`${s.name} · ${readable(s.type)} · ${s.bridgeName || s.bridge.slice(-5)}${s.reachable ? '' : ' · unavailable'}`);
       serviceSelect.value = old || '';
     }
     fillServices(); filter.oninput = fillServices;

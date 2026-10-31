@@ -12,7 +12,7 @@ const artifacts = join(root,'local-work','artifacts'); await mkdir(artifacts,{ r
 const server = createServer(async (request,response) => {
   const names = { '/': 'index.html','/app.js': 'app.js','/style.css': 'style.css' }; const file = names[request.url];
   if (!file) { response.writeHead(404); response.end(); return; }
-  const content = await readFile(join(publicDir,file),'utf8'); response.writeHead(200,{ 'Content-Type': file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html' });
+  const content = await readFile(join(publicDir,file),'utf8'); response.writeHead(200,{ 'Content-Type': (file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html') + '; charset=utf-8' });
   response.end(file === 'index.html' ? `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:system-ui;background:#fff;color:#263238;margin:12px}.form-control{box-sizing:border-box;width:100%;border:1px solid #bbb;border-radius:5px;padding:8px;background:transparent;color:inherit}.btn{border:1px solid #246b65;border-radius:5px;padding:8px 12px;background:transparent;cursor:pointer;color:inherit}.btn-primary{background:#246b65;color:white}.btn:disabled{opacity:.5}button{font:inherit}*{box-sizing:border-box}</style></head><body>${content}</body></html>` : content);
 });
 const port = await listen(server,0,'127.0.0.1');
@@ -38,7 +38,7 @@ try {
   await page.exposeFunction('updateConfig',async config => { draft = structuredClone(config[0]); });
   await page.exposeFunction('saveConfig',async () => { saved = structuredClone(draft); });
   await page.addInitScript(() => { window.homebridge = { getPluginConfig: async () => [{ _bridge: { username: 'AA:00:00:00:00:01' } }],request: (path,body) => window.bridgeRequest(path,body),updatePluginConfig: value => window.updateConfig(value),savePluginConfig: () => window.saveConfig(),disableSaveButton() {},enableSaveButton() {} }; });
-  await page.goto(`http://127.0.0.1:${port}`); await page.waitForSelector('#address option[value="192.168.1.2"]');
+  await page.goto(`http://127.0.0.1:${port}`); await page.waitForSelector('#address option[value="192.168.1.2"]',{ state: 'attached' });
   assert.equal(await page.locator('#save').isDisabled(),true);
   await page.locator('#address').selectOption('192.168.1.2'); await page.locator('#hubs').fill('192.168.1.3'); await page.locator('#hubs').dispatchEvent('change');
   await page.waitForFunction(() => !document.getElementById('save').disabled);

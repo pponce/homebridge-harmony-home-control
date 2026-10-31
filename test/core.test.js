@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { validateConfig, bridgeCredentials, safeMessage } from '../lib/config.js';
 import { StateStore } from '../lib/state.js';
@@ -36,6 +36,12 @@ test('discovery includes custom controls, respects child PIN and excludes timed 
   assert.equal(services[0].characteristics.find(c => c.id === longUuid('F00')).canWrite,false);
   assert.ok(f.seenPins.every(pin => pin === '031-45-155'));
   assert.ok(!JSON.stringify(services).includes('031-45'));
+});
+test('invalid identity state is preserved and never silently replaced', async t => {
+  const directory = await temporary(t), file = join(directory,'state.json');
+  await writeFile(file,'{"version":1,"serial":"abcdef012345","users":"invalid"}');
+  await assert.rejects(new StateStore(directory).load(),/Cannot read/);
+  assert.equal(await readFile(file,'utf8'),'{"version":1,"serial":"abcdef012345","users":"invalid"}');
 });
 test('toggle commands are serialized and read fresh state, including false values', async t => {
   const f = await fixture(t); const action = { serviceId: SERVICE, characteristic: ON, operation: 'toggle' };
