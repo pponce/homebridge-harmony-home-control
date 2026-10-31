@@ -74,7 +74,9 @@
     const pendingRestart = runtime?.running && latestHash && latestHash !== runtime.configHash;
     const disabled = !configValid || !dirty() || editorOpen || saving || validating;
     for (const id of ['save','save-top']) { $(id).disabled = disabled; $(id).textContent = saving ? 'Saving…' : 'Save settings'; $(id).setAttribute('aria-busy',String(saving)); }
-    if (disabled) homebridge.disableSaveButton(); else homebridge.enableSaveButton();
+    // Homebridge's outer Save also closes settings and offers a bridge restart.
+    // Keep that action available after an embedded save, even with a clean draft.
+    if (!configValid || editorOpen || saving || validating) homebridge.disableSaveButton(); else homebridge.enableSaveButton();
     $('save-state').textContent = saving ? 'Saving your settings…' : editorOpen ? 'Finish or cancel your edit to save' : validating ? 'Checking your changes…' : !configValid ? 'Complete the connection settings' : dirty() ? 'Unsaved changes' : pendingRestart ? 'Settings saved · restart needed' : 'All changes saved';
     $('save-top-state').textContent = $('save-state').textContent;
     $('restart-note').hidden = !dirty() && !pendingRestart;
@@ -101,7 +103,7 @@
       await changed(); if (!configValid) return;
       const snapshot = JSON.stringify(config);
       await homebridge.savePluginConfig(); savedSnapshot = snapshot;
-      notice('Settings saved. Restart this plugin’s bridge, then open Connect Harmony.');
+      notice('Settings saved. Use Homebridge’s outer Save button to finish and open its restart prompt.');
       await refreshStatus();
     } finally { saving = false; syncSaveState(); }
   }

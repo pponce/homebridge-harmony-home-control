@@ -64,13 +64,14 @@ try {
   await page.exposeFunction('saveConfig',async () => { if (failNextSave) { failNextSave = false; throw new Error('Save failed for test'); } saved = structuredClone(draft); });
   await page.addInitScript(() => { window.homebridge = {
     getPluginConfig: async () => { window.configLoadCount = (window.configLoadCount || 0) + 1; return [{ _bridge: { username: 'AA:00:00:00:00:01' } }]; },
-    request: (path,body) => window.bridgeRequest(path,body),updatePluginConfig: value => window.updateConfig(value),savePluginConfig: () => window.saveConfig(),disableSaveButton() {},enableSaveButton() {},
+    request: (path,body) => window.bridgeRequest(path,body),updatePluginConfig: value => window.updateConfig(value),savePluginConfig: () => window.saveConfig(),disableSaveButton() { window.outerSaveEnabled = false; },enableSaveButton() { window.outerSaveEnabled = true; },
     addEventListener: (event,listener) => { if (event === 'ready') setTimeout(() => { listener(); listener(); },50); },
   }; });
   await page.goto(`http://127.0.0.1:${port}`); await page.waitForSelector('#address option[value="192.168.1.2"]',{ state: 'attached' });
   assert.equal(await page.evaluate(() => window.configLoadCount),1, 'Repeated host ready events must not reset the draft');
   assert.equal(await page.locator('#save').isDisabled(),true);
   assert.equal(await page.locator('#save-top').isDisabled(),true);
+  assert.equal(await page.evaluate(() => window.outerSaveEnabled),false);
   await page.setViewportSize({width:1000,height:6000});
   await page.locator('[data-tab="pair"]').click();
   assert.ok((await page.locator('.hhc').boundingBox()).height < 3000, 'Short tabs must shrink independently of the iframe viewport height');
@@ -178,6 +179,7 @@ try {
   await page.waitForFunction(() => !document.getElementById('save').disabled); assert.equal(draft.hueDevices[0].id,hueId);
   await page.locator('[data-tab="connection"]').click(); await page.locator('#add-real-hue').click();
   let bridgeEditor = page.locator('#real-hue-editor'); assert.equal(await page.locator('#save').isDisabled(),true);
+  assert.equal(await page.evaluate(() => window.outerSaveEnabled),false,'Outer Save must not submit an unfinished editor');
   await bridgeEditor.getByRole('button',{ name: 'Find Hue bridges',exact: true }).click();
   await bridgeEditor.getByLabel('Discovered Hue bridges').selectOption(realBridge.id);
   assert.equal(await bridgeEditor.getByLabel('Hue bridge IPv4 address').inputValue(),realBridge.host);
@@ -214,10 +216,12 @@ try {
   await page.locator('#save-top').click(); await page.waitForFunction(() => document.getElementById('notice').textContent.startsWith('Settings saved'));
   await page.waitForFunction(() => document.getElementById('save-state').textContent.includes('restart needed'));
   assert.equal(await page.locator('#save').isDisabled(),true); assert.match(await page.locator('#save-state').textContent(),/restart needed/);
+  assert.equal(await page.evaluate(() => window.outerSaveEnabled),true,'Outer Save remains available after embedded save for the host restart workflow');
   assert.equal(saved.configuratorPublicUrl,'https://harmony.example.com');
   assert.equal(saved.hueDevices.length,2); assert.equal(saved.rokuButtons.length,1); assert.equal(saved.hueBridges.length,1);
   assert.ok(!JSON.stringify(saved).includes('apiKey'));
   runningHash = configHash(saved); await page.locator('[data-tab="pair"]').click(); await page.waitForFunction(() => !document.getElementById('pair').disabled);
+  assert.equal(await page.evaluate(() => window.outerSaveEnabled),true,'Outer Save supports saving again even when the running configuration matches');
   assert.match(await page.locator('#events').textContent(),/Play received/);
   await page.screenshot({ path: join(artifacts,'ui-pair-desktop.png'),fullPage: true });
   await page.setViewportSize({ width: 390,height: 844 }); await page.locator('[data-tab="roku"]').click();
