@@ -19,7 +19,7 @@ The plugin operates through Homebridge’s local accessory-control interface and
 
 ## Install from GitHub
 
-The preview is available on the [`combined-hue-bridge`](https://github.com/pponce/homebridge-harmony-home-control/tree/combined-hue-bridge) branch. Clone this repository into a single working folder and check out that branch. For a private repository, authenticate Git on that machine first. Keep the checkout: it is the source for future updates.
+The latest preview is available on [`main`](https://github.com/pponce/homebridge-harmony-home-control/tree/main). Clone this repository into a single working folder and check out `main`. For a private repository, authenticate Git on that machine first. Keep the checkout: it is the source for future updates.
 
 On an `hb-service` installation, package the checkout and install the tarball with this sequence, substituting the checkout’s absolute path. Packaging gives Homebridge its own installed copy and avoids a live symlink into the development folder. The tarball stays under the project’s `local-work/artifacts` folder:
 
