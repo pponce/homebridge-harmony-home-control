@@ -29,6 +29,7 @@
   function notice(message, error = false) {
     const target = $(error ? 'validation' : 'notice'); target.replaceChildren(); target.hidden = !message;
     if (!message) return;
+    $(error ? 'notice' : 'validation').hidden = true;
     const dismiss = button('×',() => { target.hidden = true; },'dismiss'); dismiss.setAttribute('aria-label',error ? 'Dismiss error' : 'Dismiss message');
     target.append(element('span',message),dismiss);
   }

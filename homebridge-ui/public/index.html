@@ -89,11 +89,13 @@
     </section>
   </section>
 
-  <footer class="save-bar">
-    <div><strong id="save-state" role="status">Loading settings…</strong><small id="restart-note" hidden>Restart this plugin’s bridge after saving to apply your changes.</small></div>
-    <button id="save" class="btn btn-primary" type="button" disabled>Save settings</button>
-  </footer>
-  <div class="feedback-stack"><div id="notice" class="feedback success" role="status" aria-live="polite" hidden></div><div id="validation" class="feedback error" role="alert" hidden></div></div>
+  <div class="save-dock">
+    <div class="feedback-stack"><div id="notice" class="feedback success" role="status" aria-live="polite" hidden></div><div id="validation" class="feedback error" role="alert" hidden></div></div>
+    <footer class="save-bar">
+      <div><strong id="save-state" role="status">Loading settings…</strong><small id="restart-note" hidden>Restart this plugin’s bridge after saving to apply your changes.</small></div>
+      <button id="save" class="btn btn-primary" type="button" disabled>Save settings</button>
+    </footer>
+  </div>
 </main>
 <script src="theme.js"></script>
 <script src="app.js"></script>
