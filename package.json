@@ -1,0 +1,25 @@
+{
+  "name": "homebridge-harmony-home-control",
+  "version": "0.1.0-alpha.1",
+  "description": "Control existing Homebridge accessories with a Logitech Harmony remote using Hue and Roku emulation.",
+  "type": "module",
+  "main": "index.js",
+  "engines": { "node": ">=22.13.0", "homebridge": "^1.8.0 || ^2.0.0" },
+  "keywords": ["homebridge-plugin", "harmony", "hue", "roku", "homekit"],
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/pponce/homebridge-harmony-home-control.git" },
+  "bugs": { "url": "https://github.com/pponce/homebridge-harmony-home-control/issues" },
+  "homepage": "https://github.com/pponce/homebridge-harmony-home-control#readme",
+  "files": ["index.js", "lib/", "homebridge-ui/", "bin/", "config.schema.json", "README.md", "LICENSE"],
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "check": "node bin/check.js",
+    "test:ui": "node test/ui.mjs",
+    "prepack": "npm run check && npm test"
+  },
+  "devDependencies": { "playwright": "^1.62.1" },
+  "dependencies": {
+    "@homebridge/hap-client": "^5.3.0",
+    "@homebridge/plugin-ui-utils": "^2.2.6"
+  }
+}

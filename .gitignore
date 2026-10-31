@@ -1,0 +1,5 @@
+node_modules/
+*.tgz
+coverage/
+local-work/artifacts/
+.DS_Store

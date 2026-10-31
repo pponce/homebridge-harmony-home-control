@@ -1,0 +1,28 @@
+{
+  "pluginAlias": "HarmonyHomeControl",
+  "pluginType": "platform",
+  "singular": true,
+  "customUi": true,
+  "headerDisplay": "Control existing Homebridge accessories with your Harmony remote.",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": { "type": "string", "default": "Harmony Home Control" },
+      "advertiseAddress": { "type": "string", "title": "Homebridge LAN IPv4 address" },
+      "harmonyHubAddresses": { "type": "array", "items": { "type": "string" } },
+      "hueEnabled": { "type": "boolean", "default": true },
+      "huePort": { "type": "integer", "default": 18080, "minimum": 1, "maximum": 65535 },
+      "rokuEnabled": { "type": "boolean", "default": true },
+      "rokuPort": { "type": "integer", "default": 8060, "minimum": 1, "maximum": 65535 },
+      "hueDevices": { "type": "array", "items": { "type": "object", "properties": {
+        "id": { "type": "string" }, "name": { "type": "string" }, "serviceId": { "type": "string" },
+        "power": { "type": "object", "properties": { "characteristic": { "type": "string" }, "onValue": {}, "offValue": {} } },
+        "brightness": { "type": "object", "properties": { "characteristic": { "type": "string" }, "min": { "type": "number" }, "max": { "type": "number" } } }
+      } } },
+      "rokuButtons": { "type": "array", "items": { "type": "object", "properties": {
+        "id": { "type": "string" }, "name": { "type": "string" }, "key": { "type": "string" },
+        "action": { "type": "object", "properties": { "serviceId": { "type": "string" }, "characteristic": { "type": "string" }, "operation": { "type": "string", "enum": ["set", "toggle", "increase", "decrease"] }, "value": {} } }
+      } } }
+    }
+  }
+}

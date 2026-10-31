@@ -1,0 +1,29 @@
+name: Test
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24, 26]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm install --ignore-scripts
+      - run: npm run check
+      - run: npm test
+      - run: npm pack --ignore-scripts
+      - if: matrix.node == 24
+        run: npx playwright install --with-deps chromium
+      - if: matrix.node == 24
+        run: npm run test:ui
+      - if: always() && matrix.node == 24
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-checks
+          path: local-work/artifacts/ui-*.png
+          if-no-files-found: ignore

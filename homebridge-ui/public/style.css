@@ -1,0 +1,43 @@
+.hhc { --accent: #246b65; --line: rgba(128,128,128,.28); --soft: rgba(95,143,138,.09); max-width: 1000px; margin: 0 auto; padding: 14px 8px 28px; font-size: 15px; line-height: 1.55; }
+.hhc h2 { margin: 5px 0 8px; font-size: 29px; font-weight: 700; letter-spacing: -.6px; }
+.hhc h3 { font-size: 20px; margin: 12px 0; }
+.hhc h4 { font-size: 18px; font-weight: 650; }
+.hhc p { margin-bottom: 14px; }
+.eyebrow { color: var(--accent); font-size: 11px; letter-spacing: 1.5px; font-weight: 700; }
+.intro { padding: 8px 4px 16px; }
+.top-actions, .section-head, .row-actions, .mapping-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.section-head { align-items: flex-start; margin-top: 14px; }
+.section-head > div { flex: 1; }
+.section-head .btn { flex-shrink: 0; margin-top: 10px; }
+.steps { display: flex; gap: 6px; flex-wrap: wrap; padding: 9px 0 18px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.steps button { border: 1px solid transparent; border-radius: 7px; padding: 9px 12px; background: transparent; color: inherit; cursor: pointer; }
+.steps button[aria-current="page"] { border-color: var(--accent); background: var(--soft); font-weight: 650; }
+.hhc button:focus-visible, .hhc input:focus-visible, .hhc select:focus-visible, .hhc summary:focus-visible { outline: 3px solid #379f94; outline-offset: 3px; }
+.badge-status { font-size: 12px; padding: 5px 10px; border-radius: 16px; background: var(--soft); }
+.form-grid, .choice-grid, .pair-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 16px 0; }
+.hhc label { display: block; font-weight: 550; margin-bottom: 13px; }
+.hhc label small { display: block; font-weight: 400; margin-top: 6px; opacity: .8; }
+.hhc input.form-control, .hhc select.form-control { margin-top: 6px; min-height: 40px; }
+.choice { border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex !important; gap: 12px; align-items: flex-start; }
+.choice input { margin-top: 5px; }
+.hhc details { border-top: 1px solid var(--line); padding-top: 12px; margin: 14px 0; }
+.hhc summary { cursor: pointer; margin-bottom: 12px; font-weight: 550; }
+.callout { background: var(--soft); border-left: 3px solid var(--accent); border-radius: 5px; padding: 14px 16px; margin: 16px 0; }
+.muted { font-size: 13px; opacity: .8; }
+.mapping-list { display: grid; gap: 12px; }
+.mapping-card, .pair-grid article { border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+.mapping-card h4 { margin: 0; }
+.mapping-card .route { margin: 8px 0 14px; font-size: 14px; overflow-wrap: anywhere; }
+.row-actions { justify-content: flex-start; flex-wrap: wrap; }
+.row-actions .btn { font-size: 13px; }
+.editor { border: 1px solid var(--accent); background: var(--soft); padding: 22px; border-radius: 10px; margin-top: 18px; }
+.editor .form-grid { margin: 0; }
+.editor .check-label { display: flex; align-items: center; gap: 9px; font-size: 14px; }
+.empty { padding: 28px 20px; text-align: center; border: 1px dashed var(--line); border-radius: 9px; }
+#notice, #validation { border-radius: 6px; padding: 10px 13px; margin-top: 14px; }
+#notice { background: rgba(40,135,100,.12); }
+#validation { background: rgba(200,100,30,.14); }
+.event { display: flex; gap: 12px; border-bottom: 1px solid var(--line); padding: 11px 0; overflow-wrap: anywhere; }
+.event time { flex-shrink: 0; font-size: 12px; opacity: .8; }
+.hhc [hidden] { display: none !important; }
+@media (max-width: 640px) { .form-grid, .choice-grid, .pair-grid { grid-template-columns: 1fr; gap: 0; } .section-head { flex-wrap: wrap; } .steps button { padding: 8px; font-size: 13px; } .hhc h2 { font-size: 25px; } .editor { padding: 15px; } .pair-grid article { margin-bottom: 14px; } }
