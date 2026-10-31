@@ -18,22 +18,27 @@ The plugin operates through Homebridge’s local accessory-control interface. It
 
 Clone this repository into a single working folder. For a private repository, authenticate Git on that machine first. Keep the checkout: it is the source for future updates.
 
-On an `hb-service` installation, install the checkout with this sequence, substituting its absolute path:
+On an `hb-service` installation, package the checkout and install the tarball with this sequence, substituting the checkout’s absolute path. Packaging gives Homebridge its own installed copy and avoids a live symlink into the development folder. The tarball stays under the project’s `local-work/artifacts` folder:
 
 ```bash
 {
   printf '\n===== HARMONY HOME CONTROL INSTALL START =====\n'
   hhc_path="$HOME/devProjects/homebridge-harmony-home-control"
   if [ -f "$hhc_path/package.json" ]; then
-    if sudo hb-service stop; then
-      if sudo hb-service add "$hhc_path"; then
-        printf 'Plugin installed.\n'
+    mkdir -p "$hhc_path/local-work/artifacts"
+    if hhc_package="$(npm pack --ignore-scripts --pack-destination "$hhc_path/local-work/artifacts" "$hhc_path")"; then
+      if sudo hb-service stop; then
+        if sudo hb-service add "$hhc_path/local-work/artifacts/$hhc_package"; then
+          printf 'Plugin installed.\n'
+        else
+          printf 'Installation failed; restarting Homebridge.\n'
+        fi
+        sudo hb-service start || printf 'Homebridge could not restart; inspect the Homebridge log.\n'
       else
-        printf 'Installation failed; restarting Homebridge.\n'
+        printf 'Could not stop Homebridge; installation was not attempted.\n'
       fi
-      sudo hb-service start || printf 'Homebridge could not restart; inspect the Homebridge log.\n'
     else
-      printf 'Could not stop Homebridge; installation was not attempted.\n'
+      printf 'Packaging failed; Homebridge was not stopped.\n'
     fi
   else
     printf 'Clone the repository into %s before installing.\n' "$hhc_path"

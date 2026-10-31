@@ -14,7 +14,7 @@
   function element(tag, text, className) { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (className) e.className = className; return e; }
   function button(text, run, className = 'btn btn-outline-primary') { const e = element('button',text,className); e.type = 'button'; e.onclick = () => Promise.resolve(run(e)).catch(error => notice(errorText(error),true)); return e; }
   function option(select, value, label) { const e = element('option',label); e.value = value; select.append(e); }
-  function field(parent, title, input, help) { const label = element('label',title); label.append(input); if (help) label.append(element('small',help)); parent.append(label); return label; }
+  function field(parent, title, input, help) { const label = element('label',title); input.setAttribute('aria-label',title); label.append(input); if (help) label.append(element('small',help)); parent.append(label); return label; }
   function select() { const input = element('select',undefined,'form-control'); return input; }
   function textInput(value = '', type = 'text') { const input = element('input',undefined,'form-control'); input.type = type; input.value = value; return input; }
   function valueInput(c, value) {
