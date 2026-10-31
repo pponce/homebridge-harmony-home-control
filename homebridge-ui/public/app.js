@@ -216,10 +216,35 @@
     const form = element('form'); container.append(form); form.append(element('h4', original ? 'Edit mapping' : kind === 'hue' ? 'Expose an accessory' : 'Add a button action'));
     const name = textInput(original?.name || ''); name.required = true; name.maxLength = 64;
     field(form,kind === 'hue' ? 'Device name in Harmony' : 'Name Mapped Action',name,kind === 'hue' ? 'The virtual Hue device uses this name when Harmony imports it.' : 'A label in this plugin. Harmony uses the Roku command assigned below.');
-    const findGrid = element('div',undefined,'form-grid'); form.append(findGrid);
-    const filter = textInput(''); filter.placeholder = 'Search by name, type, or bridge'; field(findGrid,'Find an accessory',filter);
-    const source = select(); option(source,'','All devices'); option(source,'homebridge','Homebridge accessories'); option(source,'hue','Real Hue bridges'); field(findGrid,'Device source',source);
-    const types = element('fieldset',undefined,'type-filters'); types.append(element('legend','Accessory types'));
+    const filter = textInput(''); filter.placeholder = 'Search by name, type, or bridge';
+    function filterSection(title, className) {
+      const section = element('details',undefined,`picker-filter ${className}`), heading = element('summary'), status = element('span','','filter-summary');
+      heading.append(element('span',title),status); section.append(heading); form.append(section);
+      return { section, status };
+    }
+    const sourceFilter = filterSection('Device Source Filter','source-filter'), sourceGroups = new Map();
+    const sourceKind = s => s.source === 'hue' ? 'hue' : 'homebridge';
+    const bridgeId = s => sourceKind(s) === 'hue' ? s.hueBridge || s.bridge : s.bridge;
+    for (const [kind, label] of [['homebridge','Homebridge accessories'],['hue','Real Hue bridges']]) {
+      const group = element('fieldset',undefined,'source-group'), legend = element('legend'), toggle = element('label',undefined,'check-label');
+      const input = document.createElement('input'); input.type = 'checkbox'; input.checked = true; input.setAttribute('aria-label',label);
+      const count = element('span','','type-count'); count.setAttribute('aria-hidden','true'); toggle.append(input,element('span',label),count); legend.append(toggle);
+      const grid = element('div',undefined,'type-grid source-grid'), empty = element('p',kind === 'hue' ? 'Connect a real Hue bridge on the Connection tab to list its devices.' : 'Find accessories to list individual Homebridge bridges.','muted');
+      group.append(legend,grid,empty); sourceFilter.section.append(group);
+      const state = { input, count, grid, empty, bridges: new Map(), defaultChecked: true }; sourceGroups.set(kind,state);
+      input.onchange = () => { state.defaultChecked = input.checked; for (const item of state.bridges.values()) item.input.checked = input.checked; fillServices(); };
+    }
+    const setSources = checked => {
+      for (const group of sourceGroups.values()) { group.defaultChecked = checked; for (const item of group.bridges.values()) item.input.checked = checked; }
+      fillServices();
+    };
+    const sourceActions = element('div',undefined,'row-actions');
+    sourceActions.append(button('All sources',() => setSources(true),'btn btn-quiet'),button('Clear sources',() => setSources(false),'btn btn-quiet')); sourceFilter.section.append(sourceActions);
+    const includeHarmony = document.createElement('input'); includeHarmony.type = 'checkbox'; includeHarmony.setAttribute('aria-label','Include homebridge-harmony accessories');
+    const harmonyLabel = element('label',undefined,'check-label harmony-filter'); harmonyLabel.append(includeHarmony,document.createTextNode('Include homebridge-harmony accessories')); sourceFilter.section.append(harmonyLabel);
+    sourceFilter.section.append(element('p','Harmony accessories are hidden by default because your remote already controls them.','muted'));
+    const typeFilter = filterSection('Accessory types Filter','accessory-type-filter');
+    const types = element('fieldset',undefined,'type-filters'); types.setAttribute('aria-label','Accessory types'); typeFilter.section.append(types);
     const typeGrid = element('div',undefined,'type-grid'); types.append(typeGrid); const typeInputs = new Map();
     for (const category of bootstrap.pickerCategories) {
       const input = document.createElement('input'); input.type = 'checkbox'; input.checked = category.defaultSelected; input.setAttribute('aria-label',category.label);
@@ -229,24 +254,64 @@
     }
     const filterActions = element('div',undefined,'row-actions');
     const setTypes = mode => { for (const c of bootstrap.pickerCategories) typeInputs.get(c.id).input.checked = mode === 'all' || mode === 'default' && c.defaultSelected; fillServices(); };
-    filterActions.append(button('All types',() => setTypes('all'),'btn btn-quiet'),button('Clear types',() => setTypes('none'),'btn btn-quiet'),button('Default types',() => setTypes('default'),'btn btn-quiet')); types.append(filterActions); form.append(types);
-    const includeHarmony = document.createElement('input'); includeHarmony.type = 'checkbox'; includeHarmony.setAttribute('aria-label','Include homebridge-harmony accessories');
-    const harmonyLabel = element('label',undefined,'check-label'); harmonyLabel.append(includeHarmony,document.createTextNode('Include homebridge-harmony accessories')); form.append(harmonyLabel);
-    form.append(element('p','Harmony accessories, Other / custom, and Setup & maintenance are hidden by default. Naming properties are excluded from new actions.','muted'));
+    filterActions.append(button('All types',() => setTypes('all'),'btn btn-quiet'),button('Clear types',() => setTypes('none'),'btn btn-quiet'),button('Default types',() => setTypes('default'),'btn btn-quiet')); types.append(filterActions);
+    typeFilter.section.append(element('p','Other / custom and Setup & maintenance are unchecked by default. Naming properties are excluded from new actions.','muted'));
     const filterStatus = element('p','','muted'); filterStatus.setAttribute('role','status');
     const refresh = button('Refresh accessory list',() => discover(),'btn btn-quiet'); const toolbar = element('div',undefined,'picker-toolbar'); toolbar.append(filterStatus,refresh); form.append(toolbar);
+    field(form,'Find an accessory',filter);
     const serviceSelect = select(); field(form,'Accessory',serviceSelect);
     const selectionNote = element('p','','muted'); selectionNote.setAttribute('role','status'); form.append(selectionNote);
     const controls = element('div'); form.append(controls); let buildMapping;
     const originalId = kind === 'hue' ? original?.serviceId : original?.action.serviceId;
     let selectedId = originalId;
     const labelFor = s => `${s.name} · ${readable(s.type)} · ${s.bridgeName || `Homebridge ${s.bridge.slice(-5)}`}${s.reachable ? '' : ' · unavailable'}`;
+    function syncSources() {
+      for (const [kind, group] of sourceGroups) {
+        const known = new Map();
+        for (const s of services.filter(s => sourceKind(s) === kind)) {
+          const id = bridgeId(s);
+          known.set(id,{ id, name: s.bridgeName || `Homebridge ${id.slice(-5)}`, detail: kind === 'hue' ? 'Hue bridge' : s.platforms?.length ? 'Child bridge' : 'Homebridge bridge' });
+        }
+        if (kind === 'hue') for (const bridge of config.hueBridges) known.set(bridge.id,{ id: bridge.id, name: bridge.name, detail: 'Hue bridge' });
+        for (const descriptor of [...known.values()].sort((a,b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))) {
+          let item = group.bridges.get(descriptor.id);
+          if (!item) {
+            const input = document.createElement('input'); input.type = 'checkbox'; input.checked = group.defaultChecked;
+            const label = element('label',undefined,'check-label'), name = element('span'), detail = element('small'), text = element('span',undefined,'source-name'), count = element('span','','type-count');
+            count.setAttribute('aria-hidden','true'); text.append(name,detail); label.append(input,text,count); group.grid.append(label);
+            item = { input, name, detail, count }; group.bridges.set(descriptor.id,item);
+            input.onchange = () => { group.defaultChecked = [...group.bridges.values()].every(item => item.input.checked); fillServices(); };
+          }
+          item.descriptor = descriptor;
+        }
+        const items = [...group.bridges.values()];
+        for (const item of items) {
+          const { id, name, detail } = item.descriptor;
+          const label = items.filter(other => other.descriptor.name === name).length > 1 ? `${name} · ${id}` : name;
+          item.name.textContent = label; item.detail.textContent = detail; item.input.setAttribute('aria-label',label);
+        }
+        group.empty.hidden = items.length > 0;
+        group.input.checked = items.length ? items.every(item => item.input.checked) : group.defaultChecked;
+        group.input.indeterminate = items.some(item => item.input.checked) && !group.input.checked;
+      }
+    }
+    const sourceSelected = s => { const group = sourceGroups.get(sourceKind(s)); return group.bridges.get(bridgeId(s))?.input.checked ?? group.defaultChecked; };
     function fillServices() {
+      syncSources();
       const old = serviceSelect.value || selectedId, query = filter.value.trim().toLowerCase();
-      const available = services.filter(s => s.selectable && (!source.value || (s.source || 'homebridge') === source.value) && `${s.name} ${s.accessoryName || ''} ${s.type} ${s.bridgeName || ''}`.toLowerCase().includes(query));
+      const searched = services.filter(s => s.selectable && `${s.name} ${s.accessoryName || ''} ${s.type} ${s.bridgeName || ''}`.toLowerCase().includes(query));
+      const available = searched.filter(sourceSelected);
       const pool = available.filter(s => includeHarmony.checked || !s.harmony);
       for (const [id, { count, input }] of typeInputs) { const total = pool.filter(s => s.category === id).length; count.textContent = `(${total})`; input.setAttribute('aria-description',`${total} controls`); }
       const matches = pool.filter(s => typeInputs.get(s.category)?.input.checked);
+      for (const [kind, group] of sourceGroups) {
+        const sourcePool = searched.filter(s => sourceKind(s) === kind && (includeHarmony.checked || !s.harmony) && typeInputs.get(s.category)?.input.checked);
+        group.count.textContent = `(${sourcePool.length})`; group.input.setAttribute('aria-description',`${sourcePool.length} controls`);
+        for (const [id, item] of group.bridges) { const total = sourcePool.filter(s => bridgeId(s) === id).length; item.count.textContent = `(${total})`; item.input.setAttribute('aria-description',`${item.descriptor.detail}, ${total} controls`); }
+      }
+      const groups = [...sourceGroups.values()], selectedBridges = groups.flatMap(group => [...group.bridges.values()]).filter(item => item.input.checked).length;
+      sourceFilter.status.textContent = groups.every(group => group.input.checked) ? 'All sources' : groups.every(group => !group.input.checked && !group.input.indeterminate) ? 'No sources' : selectedBridges ? `${selectedBridges} bridges selected` : 'Custom selection';
+      typeFilter.status.textContent = `${[...typeInputs.values()].filter(item => item.input.checked).length} of ${typeInputs.size} types`;
       serviceSelect.replaceChildren(); option(serviceSelect,'','Choose an accessory');
       for (const s of matches) option(serviceSelect,s.id,labelFor(s));
       const current = services.find(s => s.id === old), outside = current && !matches.some(s => s.id === old);
@@ -258,7 +323,7 @@
       selectionNote.hidden = !selectionNote.textContent;
       refresh.disabled = discovering; refresh.textContent = discovering ? 'Finding accessories…' : 'Refresh accessory list';
     }
-    fillServices(); filter.oninput = fillServices; source.onchange = fillServices; includeHarmony.onchange = fillServices;
+    fillServices(); filter.oninput = fillServices; includeHarmony.onchange = fillServices;
     refreshPicker = () => { if (lastEditor !== container || !container.contains(form)) return; fillServices(); if (!buildMapping) drawControls(true); };
     function drawControls(useOriginal) {
       controls.replaceChildren(); buildMapping = null;

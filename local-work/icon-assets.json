@@ -1,0 +1,20 @@
+{
+  "project": "homebridge-harmony-home-control",
+  "route": "Built-in image_gen",
+  "prompt": "Create a polished minimalist icon for the Homebridge Harmony Home Control software project. One centered white universal remote with a bold circular directional pad and two simple mint buttons, integrated beneath a white house-roof outline. Thick clean geometry, few elements, crisp flat vector-like edges, recognizable at tiny icon sizes. White and mint #56c4ac symbol on an entirely flat SOLID teal #0e796b square background, edge to edge. The entire image is opaque. No transparency, no black areas, no vignette, no texture, no drop shadows, no gradient or light effects. No words, letters, numbers, watermark or existing company logo. A single final square icon, no mockup or multiple options. This will be exported as 1024x1024 and 128x128 PNGs for a GitHub README.",
+  "exports": [
+    {
+      "path": "assets/icon-large.png",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+      "path": "assets/icon-small.png",
+      "width": 128,
+      "height": 128
+    }
+  ],
+  "processing": "ImageMagick proportional downscaling and metadata stripping; no hand-drawn replacement or compositing.",
+  "background": "Opaque teal; same artwork in both sizes.",
+  "usage": "README header and Project icons section. The configuration UI header is unchanged."
+}

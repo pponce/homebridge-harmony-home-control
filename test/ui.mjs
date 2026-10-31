@@ -18,7 +18,7 @@ const server = createServer(async (request,response) => {
 });
 const port = await listen(server,0,'127.0.0.1');
 const on = '00000025-0000-1000-8000-0026BB765291', brightness = '00000008-0000-1000-8000-0026BB765291', configuredName = '000000E3-0000-1000-8000-0026BB765291';
-const service = { id: 'AA:BB:CC:DD:EE:FF/2/10',name: 'Reading lamp',bridge: 'AA:BB:CC:DD:EE:FF',type: 'Lightbulb',reachable: true,characteristics: [
+const service = { id: 'AA:BB:CC:DD:EE:FF/2/10',name: 'Reading lamp',bridge: 'AA:BB:CC:DD:EE:FF',bridgeName: 'Main Homebridge',platforms: [],type: 'Lightbulb',reachable: true,characteristics: [
   { id: on,type: 'On',format: 'bool',canRead: true,canWrite: true,value: false },
   { id: brightness,type: 'Brightness',format: 'int',canRead: true,canWrite: true,minValue: 0,maxValue: 100,minStep: 1,value: 50 },
   { id: configuredName,type: 'ConfiguredName',format: 'string',canRead: true,canWrite: true,value: 'Reading lamp' },
@@ -26,8 +26,8 @@ const service = { id: 'AA:BB:CC:DD:EE:FF/2/10',name: 'Reading lamp',bridge: 'AA:
 const makeService = (aid, name, type, extra = {}) => ({ ...structuredClone(service), id: `AA:BB:CC:DD:EE:FF/${aid}/10`, name, type, characteristics: [structuredClone(service.characteristics[0])], ...extra });
 const harmonyService = makeService(3,'Watch TV','Switch',{ manufacturer: 'Harmony' });
 const internalService = makeService(4,'Reset filter','FilterMaintenance');
-const switchService = makeService(5,'Harmony room switch','Switch',{ manufacturer: 'Other' });
-const fanService = makeService(6,'Ceiling fan','Fanv2');
+const switchService = makeService(5,'Harmony room switch','Switch',{ manufacturer: 'Other',id: 'AA:BB:CC:DD:EE:10/5/10',bridge: 'AA:BB:CC:DD:EE:10',bridgeName: 'Room controls',platforms: ['Script2'] });
+const fanService = makeService(6,'Ceiling fan','Fanv2',{ id: 'AA:BB:CC:DD:EE:20/6/10',bridge: 'AA:BB:CC:DD:EE:20',bridgeName: 'Fans',platforms: ['FanControls'] });
 const lockService = makeService(7,'Front door','LockMechanism');
 const metadataService = makeService(8,'HDMI input','InputSource',{ characteristics: [structuredClone(service.characteristics[2])] });
 const customService = makeService(9,'Custom button','CustomAction');
@@ -87,19 +87,31 @@ try {
   // The first click opens the editor even while discovery is slow or returns no devices.
   await page.locator('[data-tab="roku"]').click(); await page.locator('#add-roku').click();
   let editor = page.locator('#roku-editor'); assert.equal(await editor.isVisible(),true);
+  assert.equal(await editor.locator('.source-filter').evaluate(e => e.open),false);
+  assert.equal(await editor.locator('.accessory-type-filter').evaluate(e => e.open),false);
+  assert.equal(await editor.getByLabel('Accessory',{ exact: true }).evaluate(e => e.closest('label').previousElementSibling.querySelector('input')?.getAttribute('aria-label')),'Find an accessory','Search must be directly above the accessory chooser');
   await editor.getByLabel('Name Mapped Action',{ exact: true }).fill('Keep this draft');
   assert.match(await editor.textContent(),/Finding accessories/);
   await page.locator('#add-roku').click(); assert.equal(await editor.getByLabel('Name Mapped Action',{ exact: true }).inputValue(),'Keep this draft');
   assert.equal(discoveryCalls,1, 'Repeated clicks must not start concurrent discovery');
+  await editor.locator('.source-filter > summary').click();
+  await editor.getByLabel('Homebridge accessories',{ exact: true }).uncheck();
   finishFirstDiscovery(); await editor.getByRole('button',{ name: 'Refresh accessory list',exact: true }).waitFor();
   assert.equal(await editor.isVisible(),true, 'An empty discovery must leave the editor open');
   await editor.getByRole('button',{ name: 'Refresh accessory list',exact: true }).click();
   await page.waitForFunction(() => document.getElementById('discovery-status').textContent.startsWith('7 controllable'));
+  assert.equal(await editor.getByLabel('Accessory',{ exact: true }).locator('option').count(),1,'A disabled source stays disabled when discovery adds its bridges');
+  assert.equal(await editor.getByLabel('Room controls',{ exact: true }).isChecked(),false);
+  await editor.getByLabel('Homebridge accessories',{ exact: true }).check();
   assert.equal(await editor.getByLabel('Accessory',{ exact: true }).locator('option').count(),5);
   await editor.getByRole('button',{ name: 'Cancel',exact: true }).click();
   assert.match(await page.locator('#hue-warning').textContent(),/automatic bridge discovery/);
   await page.locator('[data-tab="hue"]').click(); await page.locator('#add-hue').click();
   editor = page.locator('#hue-editor');
+  assert.equal(await editor.locator('.source-filter').evaluate(e => e.open),false);
+  assert.equal(await editor.locator('.accessory-type-filter').evaluate(e => e.open),false);
+  await editor.locator('.source-filter > summary').click();
+  await editor.locator('.accessory-type-filter > summary').click();
   const options = () => editor.getByLabel('Accessory',{ exact: true }).locator('option').evaluateAll(items => items.map(item => item.value).filter(Boolean));
   assert.deepEqual(await options(),[service.id,switchService.id,fanService.id,lockService.id]);
   assert.equal(await editor.getByLabel('Setup & maintenance',{ exact: true }).isChecked(),false);
@@ -108,15 +120,32 @@ try {
   await editor.getByLabel('Other / custom',{ exact: true }).uncheck(); assert.ok(!(await options()).includes(customService.id));
   await editor.getByRole('button',{ name: 'Clear types',exact: true }).click(); assert.deepEqual(await options(),[]);
   await editor.getByLabel('Locks',{ exact: true }).check(); assert.deepEqual(await options(),[lockService.id]);
-  await editor.getByLabel('Fans',{ exact: true }).check(); assert.deepEqual(await options(),[fanService.id,lockService.id]);
+  await editor.locator('.accessory-type-filter').getByLabel('Fans',{ exact: true }).check(); assert.deepEqual(await options(),[fanService.id,lockService.id]);
   await editor.getByLabel('Find an accessory',{ exact: true }).fill('ceiling'); assert.deepEqual(await options(),[fanService.id]);
-  await editor.getByLabel('Device source',{ exact: true }).selectOption('hue'); assert.deepEqual(await options(),[]);
-  await editor.getByLabel('Device source',{ exact: true }).selectOption(''); await editor.getByLabel('Find an accessory',{ exact: true }).fill('');
+  await editor.getByLabel('Homebridge accessories',{ exact: true }).uncheck(); assert.deepEqual(await options(),[]);
+  await editor.getByLabel('Homebridge accessories',{ exact: true }).check(); await editor.getByLabel('Find an accessory',{ exact: true }).fill('');
   await editor.getByRole('button',{ name: 'All types',exact: true }).click(); assert.ok((await options()).includes(internalService.id));
   assert.ok(!(await options()).includes(harmonyService.id)); assert.ok(!(await options()).includes(metadataService.id));
   await editor.getByLabel('Include homebridge-harmony accessories',{ exact: true }).check(); assert.ok((await options()).includes(harmonyService.id));
   await editor.getByLabel('Include homebridge-harmony accessories',{ exact: true }).uncheck();
   await editor.getByRole('button',{ name: 'Default types',exact: true }).click();
+  await editor.getByRole('button',{ name: 'Clear sources',exact: true }).click(); assert.deepEqual(await options(),[]);
+  await editor.getByLabel('Room controls',{ exact: true }).check(); assert.deepEqual(await options(),[switchService.id]);
+  await editor.locator('.source-filter').getByLabel('Fans',{ exact: true }).check(); assert.deepEqual(await options(),[switchService.id,fanService.id]);
+  assert.equal(await editor.getByLabel('Homebridge accessories',{ exact: true }).evaluate(e => e.indeterminate),true);
+  assert.match(await editor.locator('.source-filter > summary').textContent(),/2 bridges selected/);
+  await editor.locator('.accessory-type-filter').getByLabel('Fans',{ exact: true }).uncheck(); assert.deepEqual(await options(),[switchService.id]);
+  await editor.getByRole('button',{ name: 'Refresh accessory list',exact: true }).click();
+  await editor.getByRole('button',{ name: 'Refresh accessory list',exact: true }).waitFor();
+  assert.deepEqual(await options(),[switchService.id],'Refreshing discovery preserves per-bridge and type selections');
+  assert.equal(await editor.locator('.source-filter').evaluate(e => e.open),true);
+  assert.equal(await editor.locator('.accessory-type-filter').evaluate(e => e.open),true);
+  await editor.locator('.source-filter > summary').click();
+  assert.deepEqual(await options(),[switchService.id],'Collapsing filters must not reset them');
+  await editor.locator('.source-filter > summary').click();
+  await editor.getByRole('button',{ name: 'All sources',exact: true }).click();
+  await editor.getByRole('button',{ name: 'Default types',exact: true }).click();
+  await page.screenshot({ path: join(artifacts,'ui-filters-desktop.png'),fullPage: true });
   await editor.getByLabel('Accessory',{ exact: true }).selectOption(service.id);
   assert.ok(!(await editor.getByLabel('Control for On and Off',{ exact: true }).locator('option').allTextContents()).includes('Configured Name'));
   await editor.getByLabel('Device name in Harmony',{ exact: true }).fill('Reading lamp <script>unsafe</script>');
@@ -130,6 +159,9 @@ try {
   await page.getByRole('button',{ name: 'Test on',exact: true }).click(); await page.waitForFunction(() => document.getElementById('notice').textContent.startsWith('Command accepted'));
   assert.equal(tests[0].value,true);
   await page.locator('#hue-list').getByRole('button',{ name: 'Edit',exact: true }).click();
+  await editor.locator('.source-filter > summary').click();
+  await editor.locator('.accessory-type-filter > summary').click();
+  await editor.getByRole('button',{ name: 'Clear sources',exact: true }).click();
   await editor.getByRole('button',{ name: 'Clear types',exact: true }).click();
   assert.equal(await editor.getByLabel('Accessory',{ exact: true }).inputValue(),service.id);
   assert.match(await editor.textContent(),/mapping is preserved/);
@@ -148,7 +180,9 @@ try {
   assert.equal(draft.hueBridges.length,1); assert.equal(draft.hueBridges[0].id,realBridge.id); assert.ok(!('apiKey' in draft.hueBridges[0]));
   await page.screenshot({ path: join(artifacts,'ui-combined-connection.png'),fullPage: true });
   await page.locator('[data-tab="hue"]').click(); await page.locator('#add-hue').click(); editor = page.locator('#hue-editor');
-  await editor.getByLabel('Device source').selectOption('hue');
+  await editor.locator('.source-filter > summary').click();
+  await editor.getByLabel('Homebridge accessories',{ exact: true }).uncheck();
+  assert.equal(await editor.getByLabel(realBridge.name,{ exact: true }).isChecked(),true);
   assert.equal(await editor.getByLabel('Accessory',{ exact: true }).locator('option').count(),2);
   await editor.getByLabel('Accessory',{ exact: true }).selectOption(hueService.id);
   await editor.getByRole('button',{ name: 'Add mapping',exact: true }).click(); await page.waitForFunction(() => !document.getElementById('save').disabled);
@@ -189,6 +223,12 @@ try {
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),'Hue bridge setup must not overflow on mobile');
   await bridgeEditor.getByRole('button',{ name: 'Cancel',exact: true }).click();
   await page.locator('[data-tab="roku"]').click(); await page.locator('#add-roku').click();
+  editor = page.locator('#roku-editor');
+  assert.equal(await editor.locator('.source-filter').evaluate(e => e.open),false);
+  assert.equal(await editor.locator('.accessory-type-filter').evaluate(e => e.open),false);
+  await page.screenshot({ path: join(artifacts,'ui-filters-collapsed-mobile.png'),fullPage: true });
+  await editor.locator('.source-filter > summary').click();
+  await editor.locator('.accessory-type-filter > summary').click();
   await page.screenshot({ path: join(artifacts,'ui-filters-mobile.png'),fullPage: true });
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),'Accessory type filters must fit on mobile');
   await page.evaluate(() => document.body.classList.add('dark-mode')); await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
@@ -206,7 +246,7 @@ try {
   assert.match(await editor.textContent(),/mapping is preserved/);
   await editor.getByRole('button',{ name: 'Update mapping',exact: true }).click(); await page.waitForFunction(() => !document.getElementById('save').disabled);
   assert.deepEqual(draft.rokuButtons.at(-1),harmonyMapping);
-  assert.deepEqual(errors,[]); console.log('UI passed: Homebridge ready lifecycle, live host/system themes, keyboard tabs, dirty/saving/error states, first-click editor with slow/empty discovery, type/source/search filters, Harmony/custom/maintenance exclusions, preserved mappings, physical Hue pairing/retry, saved child-bridge settings, labels, escaping, and mobile layout with persistent save controls.');
+  assert.deepEqual(errors,[]); console.log('UI passed: Homebridge ready lifecycle, live host/system themes, keyboard tabs, dirty/saving/error states, first-click editor with slow/empty discovery, collapsed source/type filters, individual child-bridge checkboxes, multi-source selection, search placement, refresh preservation, Harmony/custom/maintenance exclusions, preserved mappings, physical Hue pairing/retry, saved child-bridge settings, labels, escaping, and mobile layout with persistent save controls.');
 } catch (error) {
   if (page) { await page.screenshot({ path: join(artifacts,'ui-failure.png'),fullPage: true }); console.error('Browser state at failure:',(await page.locator('body').innerText()).slice(0,8000)); }
   throw error;

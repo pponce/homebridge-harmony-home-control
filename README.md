@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/icon-large.png" alt="Harmony Home Control project icon" width="160" height="160"></p>
+
 # Harmony Home Control
 
 Control real Hue lights and existing Homebridge accessories with a Logitech Harmony remote. The plugin presents one combined virtual **Hue bridge** for dedicated home-control buttons and a virtual **Roku** for ordinary buttons in Harmony activities. Commands go directly to the selected physical Hue bridge or to the original Homebridge accessory plugin.
@@ -63,13 +65,17 @@ Optionally select **Add Hue bridge** under **Real Hue bridges**:
 1. Select **Find Hue bridges** and choose a discovered bridge, or enter its IPv4 address manually. Discovery is local and does not query Hue’s cloud; manual addresses are useful across VLANs.
 2. Press the button on that **physical** Hue bridge, then select **Connect Hue bridge** within 30 seconds. This grants this plugin its own authorization. Reconnecting an already authorized bridge can reuse that authorization.
 3. Repeat for additional physical Hue bridges. Only the devices you map to buttons are presented to Harmony.
-4. Select **Find accessories**, then choose devices in either button editor. The **Device source** selector filters Homebridge devices and real Hue devices. Bridge labels distinguish identical names.
+4. Select **Find accessories**, then choose devices in either button editor. Expand **Device Source Filter** to select Homebridge devices, real Hue devices, or individual bridges. Discovered child bridges have their own checkboxes. Bridge labels distinguish identical names.
 
 The combined picker includes Homebridge main/child-bridge services and the connected Hue bridges’ lights, plugs, and groups. A Hue group appears as one selectable control and sends commands to the physical bridge’s group API. On/off is supported; brightness is offered only for dimmable lights and groups. Read-only sensors, timed-write controls, additional-authorization controls, and binary data/TLV controls are not supported. Scenes, color, and color temperature are not available through this proxy.
 
-Both mapping editors combine **Find an accessory**, **Device source**, and **Accessory types** checkboxes. Types include light bulbs, locks, switches, outlets, fans, blinds/curtains, doors/garages, climate controls, TVs/speakers, water/irrigation, security systems, Hue groups, and custom controls. Counts reflect the current search, source, and Harmony inclusion setting. Use **Clear types** to select just a few, **All types** to include maintenance services, or **Default types** to restore the usual device types.
+Both mapping editors have **Device Source Filter** and **Accessory types Filter** sections, collapsed by default. Their headers summarize the current selections. Collapsing a section keeps its filters active. **Find an accessory** sits directly above the **Accessory** chooser and searches names, types, and bridge names.
 
-Accessories from `homebridge-harmony` are hidden by default because Harmony already controls them. Enable **Include homebridge-harmony accessories** to select one deliberately. Identification uses that plugin’s Harmony manufacturer metadata or its dedicated child-bridge platform, not accessory display names or the Logitech manufacturer alone. **Setup & maintenance** services, including input configuration, filter resets, camera setup, and bridge management, are unchecked by default. **Other / custom** is also unchecked; select it to include custom controls. Devices are not automatically removed just because they are temporarily unavailable.
+Source checkboxes let you combine any number of discovered Homebridge bridges, including child bridges, with connected real Hue bridges. The **Homebridge accessories** and **Real Hue bridges** checkboxes select or clear their whole groups; a partially selected group shows a mixed checkbox. Use **Clear sources** to choose a few bridges or **All sources** to restore them all. Selections survive discovery refreshes while the editor is open. Filters reset when opening a new editor and do not change saved mappings.
+
+Accessory types include light bulbs, locks, switches, outlets, fans, blinds/curtains, doors/garages, climate controls, TVs/speakers, water/irrigation, security systems, Hue groups, and custom controls. Type counts reflect search, selected sources, and the Harmony inclusion setting; source counts reflect search, selected types, and the Harmony inclusion setting. Use **Clear types** to select just a few, **All types** to include maintenance services, or **Default types** to restore the usual device types.
+
+Accessories from `homebridge-harmony` are hidden by default because Harmony already controls them. Enable **Include homebridge-harmony accessories** inside **Device Source Filter** to select one deliberately. Identification uses that plugin’s Harmony manufacturer metadata or its dedicated child-bridge platform, not accessory display names or the Logitech manufacturer alone. **Setup & maintenance** services, including input configuration, filter resets, camera setup, and bridge management, are unchecked by default. **Other / custom** is also unchecked; select it to include custom controls. Devices are not automatically removed just because they are temporarily unavailable.
 
 Naming and identification properties such as **Configured Name** and **Identify** are excluded from new actions. Configured Name renames an accessory; it is not a power command. Services with no supported action controls do not appear in new selections. Filters affect the picker only: existing mappings continue to work, and an existing selection outside the filters stays visible with an explanation. Existing metadata mappings remain editable with a notice so they are not silently changed.
 
@@ -171,6 +177,12 @@ npm pack
 Protocol tests use local HTTP and UDP sockets with a simulated HAP accessory and simulated physical Hue bridges. They cover mixed routing, authorization, multiple bridges, group writes, state changes, unavailable devices, and stable identities. Browser tests exercise physical bridge discovery/pairing, source selection, mapping, child-bridge settings, and narrow-screen layout. CI installs the runtime dependencies and exercises their imports and the Homebridge UI IPC protocol. These checks do not substitute for testing real Hue hardware and Harmony pairing.
 
 No build step is required to install from a Git checkout. No publishing workflow is included.
+
+## Project icons
+
+<img src="assets/icon-small.png" alt="Small Harmony Home Control icon" width="48" height="48">
+
+[Large PNG · 1024 × 1024](assets/icon-large.png) · [Small PNG · 128 × 128](assets/icon-small.png)
 
 ## References
 

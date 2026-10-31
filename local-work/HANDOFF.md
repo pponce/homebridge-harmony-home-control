@@ -9,9 +9,9 @@ Present selected real Hue devices and existing Homebridge accessories as one emu
 - Repository: https://github.com/pponce/homebridge-harmony-home-control
 - Feature branch: combined-hue-bridge.
 - Draft PR: https://github.com/pponce/homebridge-harmony-home-control/pull/1.
-- Published implementation: the alpha.6 dropdown styling commit on combined-hue-bridge. Resolve the branch head for its SHA; the preceding alpha.5 release was c76614eea7c82f892b5d099813aa661efbf2213e.
+- Published implementation: the alpha.7 filter and project-icon commit on combined-hue-bridge. Resolve the branch head for its SHA; the preceding alpha.6 release was 075c4deb73b07f73140d92a1ac289fd308a09e6f.
 - Base main commit: 7d145fc7f52b928589c16f5a11d7bfcff813a59f.
-- Package version: 0.1.0-alpha.6.
+- Package version: 0.1.0-alpha.7.
 - Working folder: /workspace/scratch/71d3a82dec8a/homebridge-harmony-home-control.
 - Local Git baseline imports the exact remote base tree a8ec23885dfbf248793572cbc2ce877dec5b5dcd; remote commits use the actual main commit as parent through the connected GitHub tools.
 
@@ -38,11 +38,15 @@ Present selected real Hue devices and existing Homebridge accessories as one emu
 - Feedback is part of the save dock and occupies its own space, so status/error messages cannot overlap the Save button. Errors remain dismissible and retries remain available.
 - All dropdowns now have a high-contrast downward arrow in a separate tinted end cap, extra text clearance, and a pointer/hover affordance. Native selection and keyboard behavior are preserved; Windows forced-colors mode uses the native arrow. The styling applies to the static network selector and dynamically created mapping/bridge selectors in both themes.
 - The user asked about removing the duplicate outer title but explicitly requested no change yet. Homebridge UI renders that modal title unconditionally outside the plugin iframe; its current message API provides no supported hide-header option. Both titles are unchanged.
+- Device Source Filter now contains group and individual bridge checkboxes. It supports multiple discovered Homebridge bridges, labels child bridges using existing platform metadata, and lists individual connected real Hue bridges. Partial groups show a mixed checkbox; All/Clear sources operate without enabling excluded Harmony accessories. Bridge identity, rather than its display name, keys selections; duplicate names are disambiguated.
+- Device Source Filter and Accessory types Filter are native keyboard-accessible disclosures, collapsed by default in each new editor. Header summaries show active selections. Discovery refreshes and collapsing preserve current filters, and sources unchecked before discovery stay unchecked when their bridges arrive. Existing selected targets remain pinned outside filters.
+- Search is immediately above the Accessory chooser. Source/type counts reflect the other filters. Other / custom and setup types remain unchecked by default; Harmony opt-in is inside Device Source Filter.
+- Project icons are in assets/icon-large.png (1024 square) and assets/icon-small.png (128 square), displayed and linked from the README and included in the package. Built-in image generation produced a white remote/home mark on opaque teal; ImageMagick only resized and stripped metadata. The exact prompt/export manifest is local-work/icon-assets.json. The configuration UI header artwork is unchanged.
 
 ## Validation
 
 - JavaScript syntax and JSON validation pass.
-- npm pack succeeds; local-work/artifacts/homebridge-harmony-home-control-0.1.0-alpha.6.tgz includes the theme script and dropdown styles and excludes tests, notes, and temporary artifacts.
+- npm pack succeeds; local-work/artifacts/homebridge-harmony-home-control-0.1.0-alpha.7.tgz includes the theme script, filter controls, and README icons and excludes tests, notes, and temporary artifacts.
 - 32 local tests pass; one installed dependency/IPC check is skipped locally and passes in CI. Coverage includes mixed HAP/Hue routing, two bridges, plugs/groups, authorization, failure isolation, ID preservation, redaction, picker classification, metadata exclusion, Harmony detection, live host/OS theme precedence, and readable text contrast in both palettes.
 - GitHub Actions passed on Node 22, 24, and 26, including the installed dependency/UI IPC test and packaging. Local dependency/browser downloads are restricted, but CI completed those checks successfully.
 - The browser workflow passed Homebridge ready events, keyboard navigation, live themes, unsaved/saving/error states and retry, first-click slow/empty discovery, repeated clicks, combined filters, default Harmony/custom/maintenance exclusions, preserved mappings, pairing retry, labels, escaping, and mobile layout with visible save controls. The user's physical Homebridge UI still needs confirmation after installing.
@@ -51,6 +55,8 @@ Present selected real Hue devices and existing Homebridge accessories as one emu
 - Direct npm dependency and Playwright Chromium downloads both returned network-policy HTTP 403. Local dependency/IPC and browser validation remain blocked; no global installation or dependency patches were attempted.
 - Physical Hue/Harmony hardware has not been tested.
 - Alpha.6 local syntax/JSON validation, 32 tests, git diff whitespace checks, and packaging pass; the same dependency/IPC test is skipped locally. The existing browser workflow runs on publication; see checks on the alpha.6 branch head for its result. No new runtime code or tests were added.
+- Alpha.6 Node 22/24/26 and browser checks passed at 075c4deb73b07f73140d92a1ac289fd308a09e6f (workflow runs 41224404269 and 41224408009).
+- Alpha.7 local syntax/JSON checks and 32 tests pass with the same dependency/IPC skip. Browser coverage now includes default-collapsed disclosures in both editors, source selections before discovery, two independently selected child bridges, partial group state, source/type/search intersection, refresh/collapse preservation, search immediately above Accessory, pinned saved mappings, and collapsed/expanded mobile layouts. See the alpha.7 branch checks for the CI result.
 
 ## Decisions and limits
 
@@ -67,7 +73,7 @@ Present selected real Hue devices and existing Homebridge accessories as one emu
 
 1. Fetch combined-hue-bridge into the existing host checkout, verify the published commit, and fast-forward the local feature branch. Preserve any local changes; do not reset or stash them automatically.
 2. Package into local-work/artifacts and install with sudo hb-service stop, sudo hb-service add <tarball>, sudo hb-service start. Restart Homebridge even if installation reports failure.
-3. Close and reopen the plugin settings after installation. Check the new dropdown arrows in light/dark themes, the save bar, one-click editor opening, search/source/type intersections, default custom exclusion, optional Harmony inclusion, exclusion of Configured Name from new actions, and the saved-card labels.
+3. Close and reopen the plugin settings after installation. In both mapping editors, check the collapsed Device Source Filter and Accessory types Filter panels, child-bridge checkboxes, search immediately above Accessory, and selection preservation after refresh/collapse. Also check dropdown arrows in light/dark themes, the save bar, one-click editor opening, default custom exclusion, optional Harmony inclusion, exclusion of Configured Name from new actions, and saved-card labels.
 4. Add each physical bridge under Connection > Real Hue bridges and authorize with its physical button. Multiple physical Hue bridges are supported simultaneously; select devices from any of them for the single combined Harmony bridge.
 5. Test each mapping, save and restart, then test Harmony pairing and physical buttons separately. Confirm the reported host click behavior and direct Hue control on physical hardware before merging PR #1.
 6. Inspect /var/lib/homebridge/homebridge.log if needed. Preserve state.json and hue-bridges.json when updating.
