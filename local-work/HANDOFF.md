@@ -8,6 +8,8 @@ Present selected real Hue devices and existing Homebridge accessories as one emu
 
 - Repository: https://github.com/pponce/homebridge-harmony-home-control
 - Feature branch: combined-hue-bridge.
+- Draft PR: https://github.com/pponce/homebridge-harmony-home-control/pull/1.
+- Published implementation commit: 9cd3d501563a8f83cec686e3711e1027bd24bdcd. A later handoff-only commit may be the branch head.
 - Base main commit: 7d145fc7f52b928589c16f5a11d7bfcff813a59f.
 - Package version: 0.1.0-alpha.4.
 - Working folder: /workspace/scratch/71d3a82dec8a/homebridge-harmony-home-control.
@@ -35,10 +37,10 @@ Present selected real Hue devices and existing Homebridge accessories as one emu
 - JavaScript syntax and JSON validation pass.
 - npm pack succeeds; local-work/artifacts/homebridge-harmony-home-control-0.1.0-alpha.4.tgz contains the new picker module and excludes tests, notes, and temporary artifacts.
 - 30 local tests pass, including mixed HAP/Hue protocol routing, two bridges, plugs/groups, authorization, failure isolation, ID preservation, redaction, type classification, metadata exclusion, and Harmony detection on main/child bridges. Existing hidden targets still accept mapped commands.
-- One installed dependency/UI IPC check is deferred to CI because runtime packages are unavailable locally.
-- Local browser tests cannot launch because the Chromium binary is absent. CI installs dependencies and Chromium and runs the browser workflow.
-- Browser tests now cover first-click slow/empty discovery, duplicate clicks, combined filters, default exclusions, existing hidden selection preservation, updated labels/cards, and mobile filter layout. They are written but have not run in a browser locally; the reported physical UI missed-click issue is not yet confirmed resolved on the user's host.
-- The user explicitly authorized publication to the existing private GitHub repository. Upload the combined-hue-bridge branch and complete GitHub Actions checks on Node 22, 24, and 26, including the browser workflow. npm publication remains outside this approval.
+- GitHub Actions passed on Node 22, 24, and 26, including the installed dependency/UI IPC test and packaging. Local dependency/browser downloads are restricted, but CI completed those checks successfully.
+- The browser workflow passed first-click slow/empty discovery, duplicate clicks, combined filters, default exclusions, existing hidden selection preservation, updated labels/cards, and mobile filter layout. The user's physical Homebridge UI still needs confirmation after installing.
+- Successful implementation checks: https://github.com/pponce/homebridge-harmony-home-control/actions/runs/41221103232 and https://github.com/pponce/homebridge-harmony-home-control/actions/runs/41221153577.
+- Publication to the existing private repository was explicitly authorized and completed. Ownership was verified against the authenticated pponce account after an automatic-review block. npm publication remains outside this approval. Main is unchanged; installation uses combined-hue-bridge.
 - Direct npm dependency and Playwright Chromium downloads both returned network-policy HTTP 403. Local dependency/IPC and browser validation remain blocked; no global installation or dependency patches were attempted.
 - Physical Hue/Harmony hardware has not been tested.
 
@@ -55,10 +57,9 @@ Present selected real Hue devices and existing Homebridge accessories as one emu
 
 ## Exact next steps
 
-1. Publication is authorized. Re-read main before publishing; it was verified at 7d145fc7f52b928589c16f5a11d7bfcff813a59f immediately after approval.
-2. Create a tree using base_tree_sha a8ec23885dfbf248793572cbc2ce877dec5b5dcd and changed file contents, create a commit with parent 7d145fc7f52b928589c16f5a11d7bfcff813a59f, and create combined-hue-bridge at that commit. Open a draft PR and finish GitHub runtime/browser checks, fixing any failures on the branch.
-3. Update the existing host checkout to the feature branch and package into local-work/artifacts.
-4. Install the package with sudo hb-service stop, sudo hb-service add <tarball>, sudo hb-service start.
-5. Check that one Add a button action click opens its editor before discovery completes. Test search/source/type intersections and optional Harmony inclusion, confirm Configured Name is absent for new actions, and check the requested saved-card labels.
-6. Open Connection > Real Hue bridges > Add Hue bridge, authorize with its physical button, and choose one Hue device plus one existing Homebridge device. Test each mapping, save and restart, then test Harmony pairing and physical buttons separately.
-7. Inspect /var/lib/homebridge/homebridge.log if needed. Preserve state.json and hue-bridges.json when updating.
+1. Fetch combined-hue-bridge into the existing host checkout, verify the published commit, and fast-forward the local feature branch. Preserve any local changes; do not reset or stash them automatically.
+2. Package into local-work/artifacts and install with sudo hb-service stop, sudo hb-service add <tarball>, sudo hb-service start. Restart Homebridge even if installation reports failure.
+3. Close and reopen the plugin settings after installation. Check one-click editor opening, search/source/type intersections, optional Harmony inclusion, exclusion of Configured Name from new actions, and the saved-card labels.
+4. Add each physical bridge under Connection > Real Hue bridges and authorize with its physical button. Multiple physical Hue bridges are supported simultaneously; select devices from any of them for the single combined Harmony bridge.
+5. Test each mapping, save and restart, then test Harmony pairing and physical buttons separately. Confirm the reported host click behavior and direct Hue control on physical hardware before merging PR #1.
+6. Inspect /var/lib/homebridge/homebridge.log if needed. Preserve state.json and hue-bridges.json when updating.
