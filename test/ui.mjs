@@ -88,6 +88,9 @@ try {
   await page.keyboard.press('Home'); assert.equal(await page.locator('#panel-connection').isVisible(),true);
   await page.locator('#address').selectOption('192.168.1.2'); await page.locator('#hubs').fill('192.168.1.3'); await page.locator('#hubs').dispatchEvent('change');
   await page.waitForFunction(() => !document.getElementById('save').disabled);
+  await page.locator('#configurator-public-url').fill('https://harmony.example.com');
+  await page.locator('#configurator-public-url').dispatchEvent('change');
+  await page.waitForFunction(() => !document.getElementById('save').disabled);
   assert.equal(await page.locator('#save-state').textContent(),'Unsaved changes');
   await page.screenshot({ path: join(artifacts,'ui-modern-connection-light.png'),fullPage: true });
   // The first click opens the editor even while discovery is slow or returns no devices.
@@ -211,6 +214,7 @@ try {
   await page.locator('#save-top').click(); await page.waitForFunction(() => document.getElementById('notice').textContent.startsWith('Settings saved'));
   await page.waitForFunction(() => document.getElementById('save-state').textContent.includes('restart needed'));
   assert.equal(await page.locator('#save').isDisabled(),true); assert.match(await page.locator('#save-state').textContent(),/restart needed/);
+  assert.equal(saved.configuratorPublicUrl,'https://harmony.example.com');
   assert.equal(saved.hueDevices.length,2); assert.equal(saved.rokuButtons.length,1); assert.equal(saved.hueBridges.length,1);
   assert.ok(!JSON.stringify(saved).includes('apiKey'));
   runningHash = configHash(saved); await page.locator('[data-tab="pair"]').click(); await page.waitForFunction(() => !document.getElementById('pair').disabled);

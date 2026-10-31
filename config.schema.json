@@ -16,6 +16,7 @@
       "rokuPort": { "type": "integer", "default": 8060, "minimum": 1, "maximum": 65535 },
       "configuratorEnabled": { "type": "boolean", "default": false, "title": "Enable Harmony configurator in this child bridge" },
       "configuratorPort": { "type": "integer", "default": 18081, "minimum": 1, "maximum": 65535 },
+      "configuratorPublicUrl": { "type": "string", "title": "Configurator public URL (HTTPS reverse proxy)", "default": "" },
       "configuratorTlsCert": { "type": "string", "title": "HTTPS certificate file (absolute path)" },
       "configuratorTlsKey": { "type": "string", "title": "HTTPS private-key file (absolute path)" },
       "hueBridges": { "type": "array", "maxItems": 16, "items": { "type": "object", "required": ["id", "name", "host"], "properties": {

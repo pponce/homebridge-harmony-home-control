@@ -57,10 +57,10 @@ test('assistant rejects HDMI loops and keeps CEC advice dependent on user answer
   const context=validateContext({devices:{102:{kind:'switch',wakeBy:'manual',sleepBy:'cec',cec:'on',offBehavior:'keep',destination:'101',port:'HDMI 2'}}},s);
   const advice=suggestions(s,context);assert.ok(advice.some(a=>a.id==='102/switch'));assert.ok(advice.some(a=>a.id==='102/cec-sleep'));assert.ok(advice.some(a=>a.confidence==='Possible mismatch'));
 });
-async function serverFixture(t) {
+async function serverFixture(t, extraConfig = {}) {
   const directory=await temporary(t), imported=nativeFixture(); let reads=0,closed=false;
   const reader={read:async()=>{reads++;return structuredClone(imported);},close(){closed=true;}};
-  const server=new ConfiguratorServer({directory,config:{...normalizeConfig(),advertiseAddress:'127.0.0.1',harmonyHubAddresses:['192.0.2.70'],configuratorPort:0},reader});
+  const server=new ConfiguratorServer({directory,config:{...normalizeConfig(),advertiseAddress:'127.0.0.1',harmonyHubAddresses:['192.0.2.70'],configuratorPort:0,...extraConfig},reader});
   await server.start();t.after(()=>server.close());
   const origin=`http://127.0.0.1:${server.port}`;
   const access=new URL(server.accessLink().url).hash.slice(8);
@@ -121,4 +121,23 @@ test('disabled by default; listener follows child-bridge lifecycle and cannot sh
   const admin=JSON.parse(await readFile(join(directory,'harmony-home-control','runtime.json'),'utf8'));
   const opened=await fetch(`http://127.0.0.1:${admin.port}/configurator/open`,{method:'POST',headers:{Authorization:`Bearer ${admin.token}`}});assert.equal(opened.status,200);
   await platform.close();assert.equal(platform.configurator.server.listening,false);assert.equal(platform.admin.listening,false);
+});
+
+
+test('public proxy URL validates origins and generates a secure authenticated access link',async t => {
+  const base={advertiseAddress:'192.0.2.10',harmonyHubAddresses:['192.0.2.70']};
+  for (const url of ['http://example.com','https://user:pass@example.com','https://example.com/path','https://example.com/?q=1','https://example.com/#hash']) assert.throws(()=>validateConfig({...base,configuratorPublicUrl:url}),/HTTPS origin/);
+  assert.equal(validateConfig({...base,configuratorPublicUrl:'https://harmony.example.com/'}).configuratorPublicUrl,'https://harmony.example.com');
+  const f=await serverFixture(t,{configuratorPublicUrl:'https://harmony.example.com'});
+  const link=f.server.accessLink().url;assert.ok(link.startsWith('https://harmony.example.com/#access='));
+  const send=(headers, payload) => new Promise((resolve,reject)=>{
+    const req=request(`${f.origin}/api/session`,{method:'POST',headers:{Host:'harmony.example.com','Content-Type':'application/json',...headers}},res=>{let text='';res.on('data',chunk=>{text+=chunk;});res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,body:JSON.parse(text)}));});req.on('error',reject);req.end(JSON.stringify(payload));
+  });
+  const payload={access:new URLSearchParams(new URL(link).hash.slice(1)).get('access')};
+  assert.equal((await send({Origin:'https://harmony.example.com'},payload)).status,403);
+  assert.equal((await send({Origin:'https://evil.example','X-Forwarded-Proto':'https'},payload)).status,403);
+  const valid=await send({Origin:'https://harmony.example.com','X-Forwarded-Proto':'https'},payload);assert.equal(valid.status,200);assert.match(valid.headers['set-cookie'][0],/; Secure/);assert.ok(valid.body.csrf);
+  let status;
+  await f.server.handle({headers:{host:'harmony.example.com','x-forwarded-proto':'https'},socket:{remoteAddress:'192.0.2.90'}},{setHeader(){},writeHead(code){status=code;},end(){}});
+  assert.equal(status,403,'Forwarded headers from a non-loopback peer must not be trusted');
 });

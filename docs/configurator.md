@@ -69,3 +69,11 @@ The current projected hub import, setup answers and draft records are stored in 
 **Export review** downloads the projected configuration, answers and changes for discussion or troubleshooting. It excludes Logitech credentials, account/remote IDs and raw IR data. Device names, the hub’s IP address and your free-text automation notes are included; review those before sharing.
 
 Disabling the option and restarting closes the listener without deleting your saved answers. If the configurator cannot start, the plugin reports its status while continuing to start the configured Hue and Roku interfaces.
+
+## HTTPS reverse proxy
+
+Set **Configurator public URL (HTTPS reverse proxy)** to the HTTPS origin, for example `https://harmony.example.com`. Leave it empty for direct access. Save and restart the child bridge; **Open configurator** then issues its access link for that origin.
+
+This mode supports a proxy on the same machine. Nginx must connect to `http://127.0.0.1:18081`, preserve `Host` and `Origin`, and overwrite `X-Forwarded-Proto` with `$scheme`. Use your actual configurator port if different. Public-host requests from non-loopback peers or without `X-Forwarded-Proto: https` are rejected. Arbitrary forwarded host headers are not trusted. Public URLs cannot contain paths, credentials, queries or fragments.
+
+Nginx handles the browser certificate; leave the plugin's certificate paths empty. Sessions through the public URL use Secure cookies and retain the same origin/CSRF protections. Configure IPv4 and IPv6 listeners when DNS publishes both address families. Direct LAN access remains available, but its browser session is separate from the public hostname session.

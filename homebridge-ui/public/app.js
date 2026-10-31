@@ -4,7 +4,7 @@
   const keys = ['Home','Rev','Fwd','Play','Select','Left','Right','Down','Up','Back','InstantReplay','Info','BackSpace','Search','Enter'];
   const defaults = { platform: 'HarmonyHomeControl', name: 'Harmony Home Control', advertiseAddress: '', harmonyHubAddresses: [], hueEnabled: true, huePort: 18080, rokuEnabled: true, rokuPort: 8060, hueDevices: [], hueBridges: [], rokuButtons: [] };
   let hueBridgeStatus = [];
-  Object.assign(defaults,{configuratorEnabled:false,configuratorPort:18081,configuratorTlsCert:'',configuratorTlsKey:''});
+  Object.assign(defaults,{configuratorPublicUrl:'',configuratorEnabled:false,configuratorPort:18081,configuratorTlsCert:'',configuratorTlsKey:''});
   let config, services = [], bootstrap, runtime, configValid = false, latestHash, changeNumber = 0, saveQueue = Promise.resolve(), editorOpen = false, lastEditor;
   let discoveryPromise, discoveryKey, discovering = false, discoveryError = '', refreshPicker;
   let savedSnapshot, saving = false, validating = false, initialized = false;
@@ -433,10 +433,12 @@
       if (config.advertiseAddress && !bootstrap.addresses.some(a => a.address === config.advertiseAddress)) option($('address'),config.advertiseAddress,`${config.advertiseAddress} · saved address (not found locally)`);
       $('address').value = config.advertiseAddress; $('hubs').value = config.harmonyHubAddresses.join(', ');
       for (const kind of ['hue','roku','configurator']) { $(`${kind}-enabled`).checked = config[`${kind}Enabled`]; $(`${kind}-port`).value = config[`${kind}Port`]; }
+      $('configurator-public-url').value = config.configuratorPublicUrl;
       $('configurator-cert').value = config.configuratorTlsCert; $('configurator-key').value = config.configuratorTlsKey;
-      for (const id of ['address','hubs','hue-enabled','roku-enabled','hue-port','roku-port','configurator-enabled','configurator-port','configurator-cert','configurator-key']) $(id).addEventListener('change',() => {
+      for (const id of ['address','hubs','hue-enabled','roku-enabled','hue-port','roku-port','configurator-enabled','configurator-port','configurator-cert','configurator-key','configurator-public-url']) $(id).addEventListener('change',() => {
         config.advertiseAddress = $('address').value; config.harmonyHubAddresses = $('hubs').value.split(/[\s,]+/).filter(Boolean);
         for (const kind of ['hue','roku','configurator']) { config[`${kind}Enabled`] = $(`${kind}-enabled`).checked; config[`${kind}Port`] = Number($(`${kind}-port`).value); }
+        config.configuratorPublicUrl = $('configurator-public-url').value.trim().replace(/\/$/,'');
         config.configuratorTlsCert = $('configurator-cert').value.trim(); config.configuratorTlsKey = $('configurator-key').value.trim();
         void changed();
       });
