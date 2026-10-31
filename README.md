@@ -26,6 +26,7 @@ Lights down. Fan on. Settle in.
 - 🧩 **Pick your Homebridge favorites.** Browse accessories by name, type, or bridge—including individual child bridges.
 - 🎛️ **Give spare buttons a job.** Set a value, toggle a control, or adjust a supported numeric value.
 - ✨ **Keep Apple Home tidy.** Commands go to your existing devices; the plugin creates no duplicate HomeKit accessories.
+- 🔎 **Inspect your Harmony setup.** Enable the optional [configurator](docs/configurator.md) in this plugin’s child bridge to inspect devices and activities, record HDMI/CEC details, and review changes and suggestions.
 
 > [!NOTE]
 > **Early preview (alpha).** Automated tests cover the protocols and configuration UI. Physical Harmony discovery, pairing, button behavior, and HTTP-port compatibility still need confirmation. Start with one lamp while you check your setup.
@@ -107,6 +108,7 @@ Direct Hue support covers on/off and supported brightness controls, including gr
 | You want to… | Head here |
 | --- | --- |
 | Set up your first button | [Setup guide](docs/setup.md) |
+| Inspect activities, power settings and HDMI/CEC behavior | [Optional Harmony configurator](docs/configurator.md) |
 | Connect across VLANs or use containers | [Network guide](docs/network.md) |
 | Find out why a button does nothing | [Troubleshooting](docs/troubleshooting.md) |
 | Contribute or explore the protocols | [Development & references](docs/development.md) |

@@ -4,6 +4,7 @@
   const keys = ['Home','Rev','Fwd','Play','Select','Left','Right','Down','Up','Back','InstantReplay','Info','BackSpace','Search','Enter'];
   const defaults = { platform: 'HarmonyHomeControl', name: 'Harmony Home Control', advertiseAddress: '', harmonyHubAddresses: [], hueEnabled: true, huePort: 18080, rokuEnabled: true, rokuPort: 8060, hueDevices: [], hueBridges: [], rokuButtons: [] };
   let hueBridgeStatus = [];
+  Object.assign(defaults,{configuratorEnabled:false,configuratorPort:18081,configuratorTlsCert:'',configuratorTlsKey:''});
   let config, services = [], bootstrap, runtime, configValid = false, latestHash, changeNumber = 0, saveQueue = Promise.resolve(), editorOpen = false, lastEditor;
   let discoveryPromise, discoveryKey, discovering = false, discoveryError = '', refreshPicker;
   let savedSnapshot, saving = false, validating = false, initialized = false;
@@ -397,6 +398,8 @@
   async function refreshStatus() {
     try {
       runtime = await homebridge.request('/status');
+      $('open-configurator').disabled = !runtime.configurator?.startsWith('Listening') || latestHash !== runtime.configHash;
+      $('configurator-status').textContent = runtime.configurator?.startsWith('Listening') ? `${runtime.configurator}. Access links expire after two minutes; your browser session lasts up to 12 hours.` : runtime.configurator || 'Enable, save settings and restart this child bridge to open the configurator.';
       $('runtime-badge').textContent = !runtime.running ? 'Setup required' : runtime.errors?.length ? 'Needs attention' : 'Proxy running';
       $('runtime-badge').dataset.tone = !runtime.running ? 'warning' : runtime.errors?.length ? 'error' : 'good';
       $('status-details').replaceChildren();
@@ -428,10 +431,12 @@
       for (const item of bootstrap.addresses) option($('address'),item.address,`${item.address} · ${item.name}`);
       if (config.advertiseAddress && !bootstrap.addresses.some(a => a.address === config.advertiseAddress)) option($('address'),config.advertiseAddress,`${config.advertiseAddress} · saved address (not found locally)`);
       $('address').value = config.advertiseAddress; $('hubs').value = config.harmonyHubAddresses.join(', ');
-      for (const kind of ['hue','roku']) { $(`${kind}-enabled`).checked = config[`${kind}Enabled`]; $(`${kind}-port`).value = config[`${kind}Port`]; }
-      for (const id of ['address','hubs','hue-enabled','roku-enabled','hue-port','roku-port']) $(id).addEventListener('change',() => {
+      for (const kind of ['hue','roku','configurator']) { $(`${kind}-enabled`).checked = config[`${kind}Enabled`]; $(`${kind}-port`).value = config[`${kind}Port`]; }
+      $('configurator-cert').value = config.configuratorTlsCert; $('configurator-key').value = config.configuratorTlsKey;
+      for (const id of ['address','hubs','hue-enabled','roku-enabled','hue-port','roku-port','configurator-enabled','configurator-port','configurator-cert','configurator-key']) $(id).addEventListener('change',() => {
         config.advertiseAddress = $('address').value; config.harmonyHubAddresses = $('hubs').value.split(/[\s,]+/).filter(Boolean);
-        for (const kind of ['hue','roku']) { config[`${kind}Enabled`] = $(`${kind}-enabled`).checked; config[`${kind}Port`] = Number($(`${kind}-port`).value); }
+        for (const kind of ['hue','roku','configurator']) { config[`${kind}Enabled`] = $(`${kind}-enabled`).checked; config[`${kind}Port`] = Number($(`${kind}-port`).value); }
+        config.configuratorTlsCert = $('configurator-cert').value.trim(); config.configuratorTlsKey = $('configurator-key').value.trim();
         void changed();
       });
       if (bootstrap.huePlatforms.length) {
@@ -451,6 +456,14 @@
       $('add-real-hue').onclick = () => editRealBridge();
       $('add-hue').onclick = () => edit('hue').catch(error => notice(errorText(error),true)); $('add-roku').onclick = () => edit('roku').catch(error => notice(errorText(error),true));
       $('refresh-status').onclick = refreshStatus;
+      $('open-configurator').onclick = async () => {
+        const opened = window.open('about:blank','_blank'); if (opened) opened.opener = null;
+        try {
+          const link = await homebridge.request('/configurator/open');
+          if (opened) opened.location.replace(link.url);
+          else { const a = element('a','Open Harmony configurator'); a.href = link.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; $('configurator-status').replaceChildren(a); }
+        } catch (error) { opened?.close(); notice(errorText(error),true); }
+      };
       $('pair').onclick = async () => { try { await homebridge.request('/pair'); notice('Pairing is open. Continue adding Philips Hue in Harmony.'); await refreshStatus(); } catch(error) { notice(errorText(error),true); } };
       for (const e of document.querySelectorAll('[data-ready]')) e.disabled = false;
       $('loading-status').hidden = true;

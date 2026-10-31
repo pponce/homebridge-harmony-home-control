@@ -17,6 +17,10 @@ Protocol tests use local HTTP and UDP sockets with a simulated HAP accessory and
 
 No build step is required to install from a Git checkout. No publishing workflow is included.
 
+The optional child-bridge configurator is implemented in `lib/configurator/` and `configurator-web/`. Its tests cover root-free resource reads, partial coverage, stale imports, session authentication, origin/CSRF checks, private state, optimistic conflicts, XML preservation, cloud account selection, uncertain saves and sync order. Browser workflows cover import, saved setup answers, suggestions, drafts, cloud save/sync with a simulated service, and mobile/dark layouts. These fixtures do not prove compatibility with a physical Harmony hub or Logitech’s current service. See the [configurator guide](configurator.md) for the supported editing surface.
+
+Protocol research used the projects below. Implementations here are independent; no Melodious, Congruity or Terraform-provider code is vendored. Melodious informed resource/schema inspection, not the rooted local-write path. The read-only hub transport uses the stock port 8088 interface. Cloud saves preserve the complete activity XML and patch only allowlisted scalar fields.
+
 ## References
 
 - [Homebridge HAP client](https://github.com/homebridge/hap-client)
@@ -29,3 +33,7 @@ No build step is required to install from a Git checkout. No publishing workflow
 - [Harmony physical button assignments](https://support.myharmony.com/en-us/customizing-physical-buttons-on-your-remote)
 - [Harmony home-control buttons](https://support.myharmony.com/en-be/customizing-home-control-buttons-remote)
 - [Homebridge Hue bridge selection](https://github.com/ebaauw/homebridge-hue/wiki/Configuration)
+- [Melodious / Harmony Hub Control](https://github.com/schlambos/harmony-hub-control)
+- [Root-free Harmony resource reads](https://github.com/sapn95/harmony-mcp)
+- [Harmony Terraform provider cloud protocol](https://github.com/steverice/terraform-provider-harmony/tree/0a223922510b21e77a797b5204803af4ee6343b6/internal/harmony)
+- [Congruity MyHarmony service contracts](https://github.com/congruity/congruity)

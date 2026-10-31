@@ -1,0 +1,56 @@
+import assert from 'node:assert/strict';
+import { mkdtemp,mkdir,rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { ConfiguratorServer } from '../lib/configurator/server.js';
+import { ConfiguratorError } from '../lib/configurator/hub.js';
+import { normalizeConfig } from '../lib/config.js';
+import { nativeFixture } from './configurator-fixtures.js';
+
+const {chromium}=await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const artifacts=join(process.cwd(),'local-work','artifacts');await mkdir(artifacts,{recursive:true});
+const directory=await mkdtemp(join(artifacts,'configurator-ui-')), imported=nativeFixture();let offline=false,pending;
+const server=new ConfiguratorServer({directory,config:{...normalizeConfig(),advertiseAddress:'127.0.0.1',harmonyHubAddresses:[imported.host],configuratorPort:0},
+  reader:{read:async()=>{if(offline)throw new ConfiguratorError('The test hub is offline.',502);return structuredClone(imported);},close(){}},
+  cloudFactory:()=>({target:null,async login(email,password,target){assert.equal(email,'fake@example.invalid');assert.equal(password,'fake-password');this.target=target;},async apply(change,submitted){submitted();pending=change;},async sync(progress){progress('Waiting for the test hub');if(pending)imported.resources.ActivityList.Activities[0].Name=pending.value;},close(){this.target=null;}})
+});
+await server.start();
+const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+try {
+  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.goto(server.accessLink().url);await page.locator('#read').waitFor({state:'visible'});
+  await page.locator('#read').click();await page.getByRole('heading',{name:'Living room display'}).waitFor();
+  assert.ok(!page.url().includes('access='));assert.equal(await page.locator('#device-count').textContent(),'2');
+  await page.getByRole('button',{name:'Setup Assistant',exact:true}).click();
+  await page.getByLabel('Device type',{exact:true}).nth(1).selectOption('switch');
+  await page.getByLabel('HDMI output connects to',{exact:true}).nth(1).selectOption('101');
+  await page.getByLabel('Input on that destination',{exact:true}).nth(1).fill('HDMI 1');
+  await page.getByLabel('HDMI-CEC is',{exact:true}).nth(1).selectOption('on');
+  await page.getByLabel('Who should wake this device?',{exact:true}).nth(1).selectOption('manual');
+  await page.getByLabel('Who should put it to sleep?',{exact:true}).nth(1).selectOption('cec');
+  await page.getByLabel('When I press All Off',{exact:true}).nth(1).selectOption('keep');
+  await page.getByRole('button',{name:'Save answers',exact:true}).click();await page.getByText('Answers saved.',{exact:false}).waitFor();
+  await page.getByRole('button',{name:/^Suggestions/}).click();await page.getByRole('heading',{name:'Treat Switch wake and TV wake separately'}).waitFor();
+  await page.screenshot({path:join(artifacts,'ui-configurator-suggestions.png'),fullPage:true});
+  await page.getByRole('button',{name:/^Activities/}).click();
+  await page.getByRole('button',{name:'Edit Activity name for Play a game',exact:true}).click();
+  await page.getByLabel('Proposed value',{exact:true}).fill('Play <game>');await page.getByRole('button',{name:'Save draft',exact:true}).click();
+  await page.getByRole('heading',{name:'Review changes',exact:true}).waitFor();assert.equal(await page.locator('game').count(),0);
+  await page.getByLabel('Logitech email',{exact:true}).fill('fake@example.invalid');await page.getByLabel('Logitech password',{exact:true}).fill('fake-password');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.getByText('Signed in for this hub.',{exact:false}).waitFor();
+  await page.getByRole('button',{name:'Review cloud save',exact:true}).click();await page.getByRole('button',{name:'Save to Logitech',exact:true}).click();
+  await page.getByText('Saved to Logitech · sync needed',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Compile & sync this hub',exact:true}).click();await page.getByText('Confirmed on hub',{exact:true}).waitFor({timeout:12000});
+  await page.getByRole('button',{name:/^Devices/}).click();
+  await page.getByRole('button',{name:'Edit Power-on delay (ms) for Living room display',exact:true}).click();await page.getByLabel('Proposed value',{exact:true}).fill('1500');await page.getByRole('button',{name:'Save draft',exact:true}).click();
+  await page.getByText('Draft only',{exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Review cloud save',exact:true}).count(),0);
+  await page.screenshot({path:join(artifacts,'ui-configurator-changes.png'),fullPage:true});
+  await page.reload();await page.getByRole('heading',{name:'Living room display'}).waitFor();
+  await page.getByRole('button',{name:'Setup Assistant',exact:true}).click();assert.equal(await page.getByLabel('Device type',{exact:true}).nth(1).inputValue(),'switch');
+  await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:/^Activities/}).click();await page.getByRole('heading',{name:'Play <game>',exact:true}).waitFor();
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  await page.screenshot({path:join(artifacts,'ui-configurator-mobile.png'),fullPage:true});
+  await page.emulateMedia({colorScheme:'dark'});await page.getByRole('button',{name:/^Devices/}).click();await page.screenshot({path:join(artifacts,'ui-configurator-dark.png'),fullPage:true});
+  offline=true;await page.locator('#read').click();await page.getByText(/Last read failed:/).waitFor();assert.equal(await page.locator('#device-count').textContent(),'2');
+  assert.deepEqual(errors,[]);
+  console.log('Configurator browser workflow passed: import, assistant persistence, conditional advice, manual drafts, cloud review/save/sync, stale read, HTML escaping, mobile and dark mode.');
+} finally {await browser.close();await server.close();await rm(directory,{recursive:true,force:true});}

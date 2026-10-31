@@ -35,6 +35,14 @@
     </section>
 
     <section class="panel">
+      <div class="section-head"><div><h2>Harmony configurator <span class="optional">Optional preview</span></h2><p>Inspect device and activity settings, describe your HDMI setup, and review suggested changes.</p></div><button id="open-configurator" class="btn btn-outline-primary" type="button" disabled>Open configurator</button></div>
+      <label class="choice"><input id="configurator-enabled" type="checkbox" data-ready disabled><span><strong>Run in this plugin’s child bridge</strong><small>Starts and stops with the plugin. No separate service is needed.</small></span></label>
+      <div class="form-grid"><label class="field"><span>Configurator port</span><input id="configurator-port" type="number" min="1" max="65535" class="form-control" data-ready disabled></label></div>
+      <details class="advanced-settings"><summary>HTTPS for Logitech sign-in</summary><p>Inspecting the hub and drafting changes work over local HTTP. Logitech sign-in requires HTTPS or a localhost SSH tunnel. Supply a browser-trusted certificate and its private key on the Homebridge machine.</p><div class="form-grid"><label class="field"><span>Certificate file (absolute path)</span><input id="configurator-cert" class="form-control" data-ready disabled></label><label class="field"><span>Private-key file (absolute path)</span><input id="configurator-key" class="form-control" data-ready disabled></label></div></details>
+      <p id="configurator-status" role="status" class="section-note">Enable, save settings and restart this child bridge to open the configurator.</p>
+    </section>
+
+    <section class="panel">
       <div class="section-head"><div><h2>Real Hue bridges <span class="optional">Optional</span></h2><p>Add one or more physical bridges. Choose their devices alongside Homebridge accessories.</p></div><button id="add-real-hue" class="btn btn-primary" type="button" data-ready disabled>Add Hue bridge</button></div>
       <div id="real-hue-editor" class="editor" hidden></div>
       <div id="real-hue-list" class="mapping-list"></div>

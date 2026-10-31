@@ -14,6 +14,10 @@
       "huePort": { "type": "integer", "default": 18080, "minimum": 1, "maximum": 65535 },
       "rokuEnabled": { "type": "boolean", "default": true },
       "rokuPort": { "type": "integer", "default": 8060, "minimum": 1, "maximum": 65535 },
+      "configuratorEnabled": { "type": "boolean", "default": false, "title": "Enable Harmony configurator in this child bridge" },
+      "configuratorPort": { "type": "integer", "default": 18081, "minimum": 1, "maximum": 65535 },
+      "configuratorTlsCert": { "type": "string", "title": "HTTPS certificate file (absolute path)" },
+      "configuratorTlsKey": { "type": "string", "title": "HTTPS private-key file (absolute path)" },
       "hueBridges": { "type": "array", "maxItems": 16, "items": { "type": "object", "required": ["id", "name", "host"], "properties": {
         "id": { "type": "string", "pattern": "^[0-9A-F]{16}$" }, "name": { "type": "string", "maxLength": 64 }, "host": { "type": "string", "title": "Real Hue bridge IPv4 address" }
       } } },

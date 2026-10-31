@@ -10,11 +10,11 @@
   "repository": { "type": "git", "url": "https://github.com/pponce/homebridge-harmony-home-control.git" },
   "bugs": { "url": "https://github.com/pponce/homebridge-harmony-home-control/issues" },
   "homepage": "https://github.com/pponce/homebridge-harmony-home-control#readme",
-  "files": ["index.js", "lib/", "homebridge-ui/", "assets/", "docs/", "bin/", "config.schema.json", "README.md", "LICENSE"],
+  "files": ["index.js", "lib/", "homebridge-ui/", "configurator-web/", "assets/", "docs/", "bin/", "config.schema.json", "README.md", "LICENSE"],
   "scripts": {
     "test": "node --test test/*.test.js",
     "check": "node bin/check.js",
-    "test:ui": "node test/ui.mjs",
+    "test:ui": "node test/ui.mjs && node test/configurator-ui.mjs",
     "prepack": "npm run check && npm test"
   },
   "devDependencies": { "playwright": "^1.62.1" },

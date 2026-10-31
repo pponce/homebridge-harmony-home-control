@@ -47,6 +47,7 @@ export class UiServer extends HomebridgePluginUiServer {
     this.onRequest('/pair', async () => {
       try { return await this.runtime('/pair','POST'); } catch (error) { throw new Error(safeMessage(error)); }
     });
+    this.onRequest('/configurator/open', () => this.runtime('/configurator/open','POST'));
     process.on('SIGTERM', () => { this.access?.close(); process.exit(0); });
     this.ready();
   }
