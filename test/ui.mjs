@@ -70,6 +70,12 @@ try {
   await page.goto(`http://127.0.0.1:${port}`); await page.waitForSelector('#address option[value="192.168.1.2"]',{ state: 'attached' });
   assert.equal(await page.evaluate(() => window.configLoadCount),1, 'Repeated host ready events must not reset the draft');
   assert.equal(await page.locator('#save').isDisabled(),true);
+  assert.equal(await page.locator('#save-top').isDisabled(),true);
+  await page.setViewportSize({width:1000,height:6000});
+  await page.locator('[data-tab="pair"]').click();
+  assert.ok((await page.locator('.hhc').boundingBox()).height < 3000, 'Short tabs must shrink independently of the iframe viewport height');
+  await page.setViewportSize({width:1000,height:900});
+  await page.locator('[data-tab="connection"]').click();
   await page.emulateMedia({ colorScheme: 'dark' }); await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
   await page.evaluate(() => document.body.className = 'config-ui-x-light'); await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
   assert.equal(await page.evaluate(() => getComputedStyle(document.body).backgroundColor),'rgb(244, 246, 248)');
@@ -202,7 +208,7 @@ try {
   failNextSave = true; await page.locator('#save').click();
   await page.waitForFunction(() => document.getElementById('validation').textContent.includes('Save failed for test'));
   assert.equal(await page.locator('#save').isDisabled(),false); assert.equal(await page.locator('#save-state').textContent(),'Unsaved changes'); assert.equal(saved,undefined);
-  await page.locator('#save').click(); await page.waitForFunction(() => document.getElementById('notice').textContent.startsWith('Settings saved'));
+  await page.locator('#save-top').click(); await page.waitForFunction(() => document.getElementById('notice').textContent.startsWith('Settings saved'));
   await page.waitForFunction(() => document.getElementById('save-state').textContent.includes('restart needed'));
   assert.equal(await page.locator('#save').isDisabled(),true); assert.match(await page.locator('#save-state').textContent(),/restart needed/);
   assert.equal(saved.hueDevices.length,2); assert.equal(saved.rokuButtons.length,1); assert.equal(saved.hueBridges.length,1);

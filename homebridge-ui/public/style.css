@@ -53,7 +53,7 @@
 }
 body { margin: 0; background: var(--hhc-bg); color: var(--hhc-text); }
 .hhc, .hhc * { box-sizing: border-box; }
-.hhc { max-width: 1080px; min-height: 100vh; display: flex; flex-direction: column; margin: 0 auto; padding: 28px 24px 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; line-height: 1.55; color: var(--hhc-text); }
+.hhc { max-width: 1080px; min-height: 0; display: flex; flex-direction: column; margin: 0 auto; padding: 28px 24px 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; line-height: 1.55; color: var(--hhc-text); }
 .hhc h1, .hhc h2, .hhc h3, .hhc h4 { color: var(--hhc-heading); font-weight: 650; letter-spacing: -.025em; }
 .hhc h1 { font-size: 28px; line-height: 1.2; margin: 0 0 5px; }
 .hhc h2 { font-size: 21px; line-height: 1.3; margin: 0 0 6px; }
@@ -191,7 +191,7 @@ body { margin: 0; background: var(--hhc-bg); color: var(--hhc-text); }
 .event:last-child { border-bottom: 0; }
 .event time { flex: 0 0 auto; color: var(--hhc-muted); font-size: 11px; }
 .event[data-tone="error"] { color: var(--hhc-danger); }
-.save-dock { position: sticky; bottom: 0; z-index: 10; margin-top: auto; }
+.save-dock { position: sticky; bottom: 0; z-index: 10; margin-top: 0; }
 .save-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; border: 1px solid var(--hhc-line); border-bottom: 0; border-radius: 10px 10px 0 0; background: var(--hhc-panel); box-shadow: var(--hhc-raised-shadow); }
 .save-bar > div { min-width: 0; }
 .save-bar strong { display: block; color: var(--hhc-heading); font-size: 13px; font-weight: 600; }
@@ -239,3 +239,7 @@ body { margin: 0; background: var(--hhc-bg); color: var(--hhc-text); }
 @media (prefers-reduced-motion: reduce) {
   .hhc *, .hhc *::before { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }
+
+/* Content height must not depend on the auto-sized Homebridge iframe. */
+.save-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.save-toolbar small { color: var(--hhc-muted); }

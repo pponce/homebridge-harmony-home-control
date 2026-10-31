@@ -73,9 +73,10 @@
   function syncSaveState() {
     const pendingRestart = runtime?.running && latestHash && latestHash !== runtime.configHash;
     const disabled = !configValid || !dirty() || editorOpen || saving || validating;
-    $('save').disabled = disabled; $('save').textContent = saving ? 'Saving…' : 'Save settings'; $('save').setAttribute('aria-busy',String(saving));
+    for (const id of ['save','save-top']) { $(id).disabled = disabled; $(id).textContent = saving ? 'Saving…' : 'Save settings'; $(id).setAttribute('aria-busy',String(saving)); }
     if (disabled) homebridge.disableSaveButton(); else homebridge.enableSaveButton();
     $('save-state').textContent = saving ? 'Saving your settings…' : editorOpen ? 'Finish or cancel your edit to save' : validating ? 'Checking your changes…' : !configValid ? 'Complete the connection settings' : dirty() ? 'Unsaved changes' : pendingRestart ? 'Settings saved · restart needed' : 'All changes saved';
+    $('save-top-state').textContent = $('save-state').textContent;
     $('restart-note').hidden = !dirty() && !pendingRestart;
   }
   function changed() {
@@ -452,7 +453,7 @@
           if (next === null) return; event.preventDefault(); tab(tabs[next].dataset.tab); tabs[next].focus();
         };
       });
-      $('save').onclick = () => save().catch(error => notice(errorText(error),true)); $('refresh').onclick = discover;
+      $('save-top').onclick = $('save').onclick = () => save().catch(error => notice(errorText(error),true)); $('refresh').onclick = discover;
       $('add-real-hue').onclick = () => editRealBridge();
       $('add-hue').onclick = () => edit('hue').catch(error => notice(errorText(error),true)); $('add-roku').onclick = () => edit('roku').catch(error => notice(errorText(error),true));
       $('refresh-status').onclick = refreshStatus;
