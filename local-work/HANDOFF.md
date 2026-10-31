@@ -8,8 +8,15 @@ Build a Homebridge proxy that exposes selected existing accessories as an emulat
 
 - Repository: https://github.com/pponce/homebridge-harmony-home-control
 - Branch: main.
-- Validated implementation commit: d34ee5848fa8a67818aeeed737dd023590e8a98b.
-- Package: homebridge-harmony-home-control, 0.1.0-alpha.1.
+- Validated implementation commit: 19d2094ec187e9ffe0da0224a64e371388c4697c.
+- Package: homebridge-harmony-home-control, 0.1.0-alpha.2.
+
+## Latest update
+
+- The empty hub address field now says “Enter your hub’s IP address,” is marked required, and explains that the address must be entered manually. A sample IP no longer looks like an automatically detected value.
+- No automatic hub detection is implemented. Existing save behavior and child-bridge configuration handling are unchanged.
+- GitHub Actions passed on Node 22, 24, and 26, including the browser workflow: https://github.com/pponce/homebridge-harmony-home-control/actions/runs/41216067578.
+- Installation of this update on the user's Homebridge host has not been confirmed.
 
 ## Implemented
 
