@@ -26,13 +26,19 @@
 .muted { font-size: 13px; opacity: .8; }
 .mapping-list { display: grid; gap: 12px; }
 .mapping-card, .pair-grid article { border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
-.mapping-card h4 { margin: 0; }
+.mapping-card h4 { margin: 0; overflow-wrap: anywhere; }
 .mapping-card .route { margin: 8px 0 14px; font-size: 14px; overflow-wrap: anywhere; }
 .row-actions { justify-content: flex-start; flex-wrap: wrap; }
 .row-actions .btn { font-size: 13px; }
 .editor { border: 1px solid var(--accent); background: var(--soft); padding: 22px; border-radius: 10px; margin-top: 18px; }
 .editor .form-grid { margin: 0; }
 .editor .check-label { display: flex; align-items: center; gap: 9px; font-size: 14px; }
+.type-filters { border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 14px 0; min-width: 0; }
+.type-filters legend { float: none; width: auto; padding: 0 5px; font-size: 15px; font-weight: 650; }
+.type-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(190px,1fr)); gap: 8px 16px; margin-bottom: 12px; }
+.type-grid .check-label { margin: 0; font-weight: 400; }
+.type-grid input { flex-shrink: 0; }
+.type-count { margin-left: auto; font-size: 12px; opacity: .75; }
 .empty { padding: 28px 20px; text-align: center; border: 1px dashed var(--line); border-radius: 9px; }
 #notice, #validation { border-radius: 6px; padding: 10px 13px; margin-top: 14px; }
 #notice { background: rgba(40,135,100,.12); }

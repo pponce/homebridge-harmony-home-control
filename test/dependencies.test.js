@@ -12,9 +12,14 @@ test('Homebridge entry point registers one platform and creates no HomeKit acces
 });
 test('installed HAP client and custom UI IPC load successfully', async t => {
   let HapClient;
-  try { ({ HapClient } = await import('@homebridge/hap-client')); await import('@homebridge/plugin-ui-utils'); }
+  try { ({ HapClient } = await import('@homebridge/hap-client')); await import('@homebridge/plugin-ui-utils'); await import('hb-hue-tools/HueClient'); await import('hb-hue-tools/HueDiscovery'); }
   catch (error) { if (process.env.CI) throw error; t.skip('Runtime dependencies cannot be downloaded in this environment; CI requires this check.'); return; }
   const client = new HapClient({ pin: '031-45-154',config: { autoStartDiscovery: false } }); client.destroy();
+  const { HueClient } = await import('hb-hue-tools/HueClient');
+  const config = { bridgeid: '001788FFFE123456', modelid: 'BSB002', swversion: '1970000000', name: 'Test Hue bridge' };
+  assert.equal(HueClient.isHueBridge(config), true); assert.ok(HueClient.rootCertificates.length >= 1);
+  const hueClient = new HueClient({ host: '192.0.2.10', config, timeout: 5, waitTimeResend: 0 });
+  hueClient.on('error', () => {}); hueClient.destroy?.();
   const directory = await temporary(t), configPath = join(directory,'config.json'); await writeFile(configPath,JSON.stringify({ bridge: { pin: '031-45-154' },platforms: [] }));
   const child = fork(new URL('../homebridge-ui/server.js',import.meta.url),[],{ env: { ...process.env,HOMEBRIDGE_STORAGE_PATH: directory,HOMEBRIDGE_CONFIG_PATH: configPath },stdio: ['ignore','ignore','pipe','ipc'] });
   t.after(() => child.kill());

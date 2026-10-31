@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateConfig, configHash, normalizeConfig } from '../lib/config.js';
 import { listen, closeServer } from '../lib/http.js';
+import { PICKER_CATEGORIES, pickerService } from '../lib/picker.js';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const root = fileURLToPath(new URL('../',import.meta.url)), publicDir = join(root,'homebridge-ui','public');
@@ -16,20 +17,43 @@ const server = createServer(async (request,response) => {
   response.end(file === 'index.html' ? `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:system-ui;background:#fff;color:#263238;margin:12px}.form-control{box-sizing:border-box;width:100%;border:1px solid #bbb;border-radius:5px;padding:8px;background:transparent;color:inherit}.btn{border:1px solid #246b65;border-radius:5px;padding:8px 12px;background:transparent;cursor:pointer;color:inherit}.btn-primary{background:#246b65;color:white}.btn:disabled{opacity:.5}button{font:inherit}*{box-sizing:border-box}</style></head><body>${content}</body></html>` : content);
 });
 const port = await listen(server,0,'127.0.0.1');
-const on = '00000025-0000-1000-8000-0026BB765291', brightness = '00000008-0000-1000-8000-0026BB765291';
+const on = '00000025-0000-1000-8000-0026BB765291', brightness = '00000008-0000-1000-8000-0026BB765291', configuredName = '000000E3-0000-1000-8000-0026BB765291';
 const service = { id: 'AA:BB:CC:DD:EE:FF/2/10',name: 'Reading lamp',bridge: 'AA:BB:CC:DD:EE:FF',type: 'Lightbulb',reachable: true,characteristics: [
   { id: on,type: 'On',format: 'bool',canRead: true,canWrite: true,value: false },
   { id: brightness,type: 'Brightness',format: 'int',canRead: true,canWrite: true,minValue: 0,maxValue: 100,minStep: 1,value: 50 },
+  { id: configuredName,type: 'ConfiguredName',format: 'string',canRead: true,canWrite: true,value: 'Reading lamp' },
 ] };
-let draft, saved, tests = [], runningHash;
+const makeService = (aid, name, type, extra = {}) => ({ ...structuredClone(service), id: `AA:BB:CC:DD:EE:FF/${aid}/10`, name, type, characteristics: [structuredClone(service.characteristics[0])], ...extra });
+const harmonyService = makeService(3,'Watch TV','Switch',{ manufacturer: 'Harmony' });
+const internalService = makeService(4,'Reset filter','FilterMaintenance');
+const switchService = makeService(5,'Harmony room switch','Switch',{ manufacturer: 'Other' });
+const fanService = makeService(6,'Ceiling fan','Fanv2');
+const lockService = makeService(7,'Front door','LockMechanism');
+const metadataService = makeService(8,'HDMI input','InputSource',{ characteristics: [structuredClone(service.characteristics[2])] });
+const homebridgeServices = [service,harmonyService,internalService,switchService,fanService,lockService,metadataService];
+const realBridge = { id: '001788FFFE123456', host: '192.168.1.20', name: 'Living room bridge' };
+const hueService = { ...structuredClone(service), id: `hue/${realBridge.id}/lights/unique-light`, source: 'hue', hueBridge: realBridge.id, bridge: realBridge.id, bridgeName: 'Hue · Living room bridge', name: 'Hue desk lamp' };
+let draft, saved, tests = [], runningHash, pairingAttempts = 0, discoveryCalls = 0, finishFirstDiscovery;
+const firstDiscovery = new Promise(resolve => { finishFirstDiscovery = resolve; });
 const browser = await chromium.launch({ headless: true,args: ['--no-sandbox'] });
 let page;
 try {
   page = await browser.newPage({ viewport: { width: 1000,height: 900 } }); const errors = []; page.on('pageerror',error => { errors.push(error.message); console.error('Browser error:',error.message); });
   await page.exposeFunction('bridgeRequest',async (path,body) => {
-    if (path === '/bootstrap') return { addresses: [{ name: 'eth0',address: '192.168.1.2' }],huePlatforms: [{ name: 'Hue',hosts: [] }] };
+    if (path === '/bootstrap') return { addresses: [{ name: 'eth0',address: '192.168.1.2' }],huePlatforms: [{ name: 'Hue',hosts: [] }],pickerCategories: PICKER_CATEGORIES };
     if (path === '/validate') return { hash: configHash(validateConfig(body)) };
-    if (path === '/discover') return { services: [service],error: null };
+    if (path === '/hue/discover') return { bridges: [realBridge] };
+    if (path === '/hue/pair') {
+      pairingAttempts++;
+      if (pairingAttempts === 1) throw new Error('Press the button on the physical Hue bridge, then try Connect again within 30 seconds.');
+      assert.equal(body.host, realBridge.host);
+      return { bridge: realBridge };
+    }
+    if (path === '/discover') {
+      discoveryCalls++;
+      if (discoveryCalls === 1) { await firstDiscovery; return { services: [], error: null, bridges: [] }; }
+      return { services: (body?.hueBridges?.length ? [...homebridgeServices,hueService] : homebridgeServices).map(pickerService),error: null, bridges: body?.hueBridges?.map(b => ({ ...b, connected: true, devices: 1 })) || [] };
+    }
     if (path === '/test') { tests.push(body.action); return { value: body.action.value }; }
     if (path === '/pair') return { pairingUntil: Date.now()+120000 };
     if (path === '/status') return { running: true,hue: 'Listening on port 18080',roku: 'Listening on port 8060',discovery: 'Advertising Hue/Roku locally',errors: [],events: [{ time: new Date().toISOString(),source: 'roku',name: 'Play received — no action assigned',ok: true }],configHash: runningHash || configHash(normalizeConfig()),pairedClients: 0 };
@@ -42,36 +66,117 @@ try {
   assert.equal(await page.locator('#save').isDisabled(),true);
   await page.locator('#address').selectOption('192.168.1.2'); await page.locator('#hubs').fill('192.168.1.3'); await page.locator('#hubs').dispatchEvent('change');
   await page.waitForFunction(() => !document.getElementById('save').disabled);
-  await page.locator('#refresh').click(); await page.waitForFunction(() => document.getElementById('discovery-status').textContent.startsWith('1 controllable'));
+  // The first click opens the editor even while discovery is slow or returns no devices.
+  await page.locator('[data-tab="roku"]').click(); await page.locator('#add-roku').click();
+  let editor = page.locator('#roku-editor'); assert.equal(await editor.isVisible(),true);
+  await editor.getByLabel('Name Mapped Action',{ exact: true }).fill('Keep this draft');
+  assert.match(await editor.textContent(),/Finding accessories/);
+  await page.locator('#add-roku').click(); assert.equal(await editor.getByLabel('Name Mapped Action',{ exact: true }).inputValue(),'Keep this draft');
+  assert.equal(discoveryCalls,1, 'Repeated clicks must not start concurrent discovery');
+  finishFirstDiscovery(); await editor.getByRole('button',{ name: 'Refresh accessory list',exact: true }).waitFor();
+  assert.equal(await editor.isVisible(),true, 'An empty discovery must leave the editor open');
+  await editor.getByRole('button',{ name: 'Refresh accessory list',exact: true }).click();
+  await page.waitForFunction(() => document.getElementById('discovery-status').textContent.startsWith('6 controllable'));
+  assert.equal(await editor.getByLabel('Accessory',{ exact: true }).locator('option').count(),5);
+  await editor.getByRole('button',{ name: 'Cancel',exact: true }).click();
   assert.match(await page.locator('#hue-warning').textContent(),/automatic bridge discovery/);
   await page.locator('[data-tab="hue"]').click(); await page.locator('#add-hue').click();
-  let editor = page.locator('#hue-editor'); await editor.getByLabel('Accessory',{ exact: true }).selectOption(service.id);
-  await editor.getByLabel('Name shown in your mappings').fill('Reading lamp <script>unsafe</script>');
+  editor = page.locator('#hue-editor');
+  const options = () => editor.getByLabel('Accessory',{ exact: true }).locator('option').evaluateAll(items => items.map(item => item.value).filter(Boolean));
+  assert.deepEqual(await options(),[service.id,switchService.id,fanService.id,lockService.id]);
+  assert.equal(await editor.getByLabel('Setup & maintenance',{ exact: true }).isChecked(),false);
+  await editor.getByRole('button',{ name: 'Clear types',exact: true }).click(); assert.deepEqual(await options(),[]);
+  await editor.getByLabel('Locks',{ exact: true }).check(); assert.deepEqual(await options(),[lockService.id]);
+  await editor.getByLabel('Fans',{ exact: true }).check(); assert.deepEqual(await options(),[fanService.id,lockService.id]);
+  await editor.getByLabel('Find an accessory',{ exact: true }).fill('ceiling'); assert.deepEqual(await options(),[fanService.id]);
+  await editor.getByLabel('Device source',{ exact: true }).selectOption('hue'); assert.deepEqual(await options(),[]);
+  await editor.getByLabel('Device source',{ exact: true }).selectOption(''); await editor.getByLabel('Find an accessory',{ exact: true }).fill('');
+  await editor.getByRole('button',{ name: 'All types',exact: true }).click(); assert.ok((await options()).includes(internalService.id));
+  assert.ok(!(await options()).includes(harmonyService.id)); assert.ok(!(await options()).includes(metadataService.id));
+  await editor.getByLabel('Include homebridge-harmony accessories',{ exact: true }).check(); assert.ok((await options()).includes(harmonyService.id));
+  await editor.getByLabel('Include homebridge-harmony accessories',{ exact: true }).uncheck();
+  await editor.getByRole('button',{ name: 'Default types',exact: true }).click();
+  await editor.getByLabel('Accessory',{ exact: true }).selectOption(service.id);
+  assert.ok(!(await editor.getByLabel('Control for On and Off',{ exact: true }).locator('option').allTextContents()).includes('Configured Name'));
+  await editor.getByLabel('Device name in Harmony',{ exact: true }).fill('Reading lamp <script>unsafe</script>');
   await editor.getByRole('button',{ name: 'Add mapping',exact: true }).click(); await page.waitForFunction(() => document.getElementById('hue-editor').hidden);
   await page.waitForFunction(() => !document.getElementById('save').disabled);
   assert.equal(draft.hueDevices.length,1); assert.equal(draft.hueDevices[0].brightness.characteristic,brightness);
+  assert.match(await page.locator('#hue-list').textContent(),/Harmony Device Name: Reading lamp <script>unsafe<\/script>/);
+  assert.match(await page.locator('#hue-list').textContent(),/Mapped Action: Reading lamp : On \(short press: On; long press: Off\)/);
   assert.equal(await page.locator('#hue-list script').count(),0);
   const hueId = draft.hueDevices[0].id;
   await page.getByRole('button',{ name: 'Test on',exact: true }).click(); await page.waitForFunction(() => document.getElementById('notice').textContent.startsWith('Command accepted'));
   assert.equal(tests[0].value,true);
   await page.locator('#hue-list').getByRole('button',{ name: 'Edit',exact: true }).click();
-  await editor.getByLabel('Name shown in your mappings').fill('Reading lamp'); await editor.getByRole('button',{ name: 'Update mapping',exact: true }).click();
+  await editor.getByRole('button',{ name: 'Clear types',exact: true }).click();
+  assert.equal(await editor.getByLabel('Accessory',{ exact: true }).inputValue(),service.id);
+  assert.match(await editor.textContent(),/mapping is preserved/);
+  await editor.getByLabel('Device name in Harmony',{ exact: true }).fill('Reading lamp'); await editor.getByRole('button',{ name: 'Update mapping',exact: true }).click();
   await page.waitForFunction(() => !document.getElementById('save').disabled); assert.equal(draft.hueDevices[0].id,hueId);
+  await page.locator('[data-tab="connection"]').click(); await page.locator('#add-real-hue').click();
+  let bridgeEditor = page.locator('#real-hue-editor'); assert.equal(await page.locator('#save').isDisabled(),true);
+  await bridgeEditor.getByRole('button',{ name: 'Find Hue bridges',exact: true }).click();
+  await bridgeEditor.getByLabel('Discovered Hue bridges').selectOption(realBridge.id);
+  assert.equal(await bridgeEditor.getByLabel('Hue bridge IPv4 address').inputValue(),realBridge.host);
+  await bridgeEditor.getByRole('button',{ name: 'Connect Hue bridge',exact: true }).click();
+  await page.waitForFunction(() => document.getElementById('validation').textContent.includes('Press the button'));
+  assert.equal(draft.hueBridges.length,0);
+  await bridgeEditor.getByRole('button',{ name: 'Connect Hue bridge',exact: true }).click();
+  await page.waitForFunction(() => document.getElementById('notice').textContent.startsWith('Hue bridge connected'));
+  assert.equal(draft.hueBridges.length,1); assert.equal(draft.hueBridges[0].id,realBridge.id); assert.ok(!('apiKey' in draft.hueBridges[0]));
+  await page.screenshot({ path: join(artifacts,'ui-combined-connection.png'),fullPage: true });
+  await page.locator('[data-tab="hue"]').click(); await page.locator('#add-hue').click(); editor = page.locator('#hue-editor');
+  await editor.getByLabel('Device source').selectOption('hue');
+  assert.equal(await editor.getByLabel('Accessory',{ exact: true }).locator('option').count(),2);
+  await editor.getByLabel('Accessory',{ exact: true }).selectOption(hueService.id);
+  await editor.getByRole('button',{ name: 'Add mapping',exact: true }).click(); await page.waitForFunction(() => !document.getElementById('save').disabled);
+  assert.equal(draft.hueDevices.length,2); assert.equal(draft.hueDevices[0].id,hueId); assert.equal(draft.hueDevices[1].serviceId,hueService.id);
+  await page.locator('#hue-list .mapping-card').filter({ hasText: 'Hue desk lamp' }).getByRole('button',{ name: 'Test on',exact: true }).click();
+  await page.waitForFunction(() => document.getElementById('notice').textContent.startsWith('Command accepted'));
+  assert.equal(tests.at(-1).serviceId,hueService.id);
   await page.screenshot({ path: join(artifacts,'ui-hue-desktop.png'),fullPage: true });
   await page.locator('[data-tab="roku"]').click(); await page.locator('#add-roku').click(); editor = page.locator('#roku-editor');
+  assert.equal(await editor.getByLabel('Include homebridge-harmony accessories',{ exact: true }).isChecked(),false);
   await editor.getByLabel('Accessory',{ exact: true }).selectOption(service.id); await editor.getByLabel('Action',{ exact: true }).selectOption('toggle');
   await editor.getByRole('button',{ name: 'Add mapping',exact: true }).click(); await page.waitForFunction(() => !document.getElementById('save').disabled);
   assert.equal(draft.rokuButtons[0].key,'Play'); assert.equal(draft.rokuButtons[0].action.operation,'toggle');
+  assert.match(await page.locator('#roku-list').textContent(),/Harmony Selector: Roku device Play/);
+  assert.match(await page.locator('#roku-list').textContent(),/Mapped Action: Reading lamp : Toggle On/);
   assert.equal(draft._bridge.username,'AA:00:00:00:00:01');
   await page.locator('#save').click(); await page.waitForFunction(() => document.getElementById('notice').textContent.startsWith('Settings saved'));
-  assert.equal(saved.hueDevices.length,1); assert.equal(saved.rokuButtons.length,1);
+  assert.equal(saved.hueDevices.length,2); assert.equal(saved.rokuButtons.length,1); assert.equal(saved.hueBridges.length,1);
+  assert.ok(!JSON.stringify(saved).includes('apiKey'));
   runningHash = configHash(saved); await page.locator('[data-tab="pair"]').click(); await page.waitForFunction(() => !document.getElementById('pair').disabled);
   assert.match(await page.locator('#events').textContent(),/Play received/);
   await page.screenshot({ path: join(artifacts,'ui-pair-desktop.png'),fullPage: true });
   await page.setViewportSize({ width: 390,height: 844 }); await page.locator('[data-tab="roku"]').click();
   await page.screenshot({ path: join(artifacts,'ui-roku-mobile.png'),fullPage: true });
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),'Mobile UI must not overflow horizontally');
-  assert.deepEqual(errors,[]); console.log('UI passed: connection validation, discovery, Hue mapping/edit/test, Roku mapping, saved bridge settings, pairing status, escaping, and mobile layout.');
+  await page.locator('[data-tab="connection"]').click();
+  await page.locator('#real-hue-list').getByRole('button',{ name: 'Remove bridge',exact: true }).click();
+  await page.waitForFunction(() => document.getElementById('validation').textContent.includes('Remove this bridge’s button mappings'));
+  assert.equal(draft.hueBridges.length,1);
+  await page.locator('#real-hue-list').getByRole('button',{ name: 'Reconnect / change address',exact: true }).click();
+  bridgeEditor = page.locator('#real-hue-editor'); assert.equal(await bridgeEditor.getByLabel('Hue bridge IPv4 address').inputValue(),realBridge.host);
+  await page.screenshot({ path: join(artifacts,'ui-hue-bridge-mobile.png'),fullPage: true });
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),'Hue bridge setup must not overflow on mobile');
+  await bridgeEditor.getByRole('button',{ name: 'Cancel',exact: true }).click();
+  await page.locator('[data-tab="roku"]').click(); await page.locator('#add-roku').click();
+  await page.screenshot({ path: join(artifacts,'ui-filters-mobile.png'),fullPage: true });
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),'Accessory type filters must fit on mobile');
+  editor = page.locator('#roku-editor');
+  await editor.getByLabel('Include homebridge-harmony accessories',{ exact: true }).check();
+  await editor.getByLabel('Accessory',{ exact: true }).selectOption(harmonyService.id);
+  await editor.getByRole('button',{ name: 'Add mapping',exact: true }).click(); await page.waitForFunction(() => !document.getElementById('save').disabled);
+  const harmonyMapping = structuredClone(draft.rokuButtons.at(-1));
+  await page.locator('#roku-list .mapping-card').filter({ hasText: 'Watch TV' }).getByRole('button',{ name: 'Edit',exact: true }).click();
+  assert.equal(await editor.getByLabel('Include homebridge-harmony accessories',{ exact: true }).isChecked(),false);
+  assert.equal(await editor.getByLabel('Accessory',{ exact: true }).inputValue(),harmonyService.id);
+  assert.match(await editor.textContent(),/mapping is preserved/);
+  await editor.getByRole('button',{ name: 'Update mapping',exact: true }).click(); await page.waitForFunction(() => !document.getElementById('save').disabled);
+  assert.deepEqual(draft.rokuButtons.at(-1),harmonyMapping);
+  assert.deepEqual(errors,[]); console.log('UI passed: first-click editor with slow/empty discovery, discovery deduplication, type/source/search filters, Harmony and maintenance exclusions, metadata controls, preserved mappings, physical Hue pairing/retry, combined mappings, saved child-bridge settings, pairing status, escaping, and mobile layout.');
 } catch (error) {
   if (page) { await page.screenshot({ path: join(artifacts,'ui-failure.png'),fullPage: true }); console.error('Browser state at failure:',(await page.locator('body').innerText()).slice(0,8000)); }
   throw error;

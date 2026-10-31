@@ -1,7 +1,7 @@
 {
   "name": "homebridge-harmony-home-control",
-  "version": "0.1.0-alpha.2",
-  "description": "Control existing Homebridge accessories with a Logitech Harmony remote using Hue and Roku emulation.",
+  "version": "0.1.0-alpha.4",
+  "description": "Control Hue lights and existing Homebridge accessories with a Logitech Harmony remote using one combined bridge.",
   "type": "module",
   "main": "index.js",
   "engines": { "node": ">=22.13.0", "homebridge": "^1.8.0 || ^2.0.0" },
@@ -19,6 +19,7 @@
   },
   "devDependencies": { "playwright": "^1.62.1" },
   "dependencies": {
+    "hb-hue-tools": "~1.3.3",
     "@homebridge/hap-client": "^5.3.0",
     "@homebridge/plugin-ui-utils": "^2.2.6"
   }

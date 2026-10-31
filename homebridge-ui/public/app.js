@@ -2,17 +2,32 @@
 (() => {
   const $ = id => document.getElementById(id);
   const keys = ['Home','Rev','Fwd','Play','Select','Left','Right','Down','Up','Back','InstantReplay','Info','BackSpace','Search','Enter'];
-  const defaults = { platform: 'HarmonyHomeControl', name: 'Harmony Home Control', advertiseAddress: '', harmonyHubAddresses: [], hueEnabled: true, huePort: 18080, rokuEnabled: true, rokuPort: 8060, hueDevices: [], rokuButtons: [] };
+  const defaults = { platform: 'HarmonyHomeControl', name: 'Harmony Home Control', advertiseAddress: '', harmonyHubAddresses: [], hueEnabled: true, huePort: 18080, rokuEnabled: true, rokuPort: 8060, hueDevices: [], hueBridges: [], rokuButtons: [] };
+  let hueBridgeStatus = [];
   let config, services = [], bootstrap, runtime, configValid = false, latestHash, changeNumber = 0, saveQueue = Promise.resolve(), editorOpen = false, lastEditor;
+  let discoveryPromise, discoveryKey, discovering = false, discoveryError = '', refreshPicker;
   const numeric = c => ['int','uint8','uint16','uint32','uint64','float'].includes(c?.format);
   const readable = name => name.replace(/([a-z])([A-Z])/g, '$1 $2');
   const short = value => value === true ? 'On' : value === false ? 'Off' : value === null ? 'No action' : String(value);
   const newId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2,'0')).join('');
   const nameOf = id => services.find(s => s.id === id)?.name || 'Unavailable accessory';
+  const controlOf = (serviceId, characteristicId) => services.find(s => s.id === serviceId)?.characteristics.find(c => c.id === characteristicId);
+  const controlName = (serviceId, characteristicId) => readable(controlOf(serviceId,characteristicId)?.type || 'Saved control');
+  const valueLabels = { TargetDoorState: ['Open','Closed'], LockTargetState: ['Unsecured','Secured'], Active: ['Inactive','Active'], TargetHeatingCoolingState: ['Off','Heat','Cool','Auto'] };
+  const controlValue = (serviceId, characteristicId, value) => {
+    const label = valueLabels[controlOf(serviceId,characteristicId)?.type]?.[value];
+    return value === null ? 'No action' : label ? `${label} (${value})` : short(value);
+  };
+  const actionDescription = action => {
+    const control = controlName(action.serviceId,action.characteristic);
+    if (action.operation === 'toggle') return `Toggle ${control}`;
+    if (action.operation === 'increase' || action.operation === 'decrease') return `${readable(action.operation)} ${control} by ${action.value}`;
+    return `Set ${control} to ${controlValue(action.serviceId,action.characteristic,action.value)}`;
+  };
   const errorText = error => error?.message || error?.error?.message || String(error);
   function notice(message, error = false) { const element = $(error ? 'validation' : 'notice'); element.textContent = message; element.hidden = !message; }
   function element(tag, text, className) { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (className) e.className = className; return e; }
-  function button(text, run, className = 'btn btn-outline-primary') { const e = element('button',text,className); e.type = 'button'; e.onclick = () => Promise.resolve(run(e)).catch(error => notice(errorText(error),true)); return e; }
+  function button(text, run, className = 'btn btn-outline-primary') { const e = element('button',text,className); e.type = 'button'; e.onclick = async () => { try { await run(e); } catch (error) { notice(errorText(error),true); } }; return e; }
   function option(select, value, label) { const e = element('option',label); e.value = value; select.append(e); }
   function field(parent, title, input, help) { const label = element('label',title); input.setAttribute('aria-label',title); label.append(input); if (help) label.append(element('small',help)); parent.append(label); return label; }
   function select() { const input = element('select',undefined,'form-control'); return input; }
@@ -21,7 +36,7 @@
     let input;
     if (c.format === 'bool' || c.validValues?.length) {
       input = select(); const values = c.format === 'bool' ? [true,false] : c.validValues;
-      const labels = { TargetDoorState: ['Open','Closed'], LockTargetState: ['Unsecured','Secured'], Active: ['Inactive','Active'], TargetHeatingCoolingState: ['Off','Heat','Cool','Auto'] }[c.type];
+      const labels = valueLabels[c.type];
       for (const v of values) option(input,JSON.stringify(v),labels?.[v] ? `${labels[v]} (${v})` : short(v));
       input.value = JSON.stringify(value ?? values[0]); if (input.selectedIndex < 0) input.selectedIndex = 0;
       input.readValue = () => JSON.parse(input.value);
@@ -57,16 +72,77 @@
     await homebridge.savePluginConfig(); notice('Settings saved. Restart this plugin’s bridge, then open Connect Harmony.');
     await refreshStatus();
   }
-  async function discover() {
-    $('refresh').disabled = true; $('refresh').textContent = 'Finding accessories…';
-    try {
-      const result = await homebridge.request('/discover'); services = result.services;
-      $('discovery-status').textContent = services.length ? `${services.length} controllable accessory services found. Choose a button section to create a mapping.` : 'No controllable accessories found yet. Check accessory control below, wait a few seconds, then try again.';
-      $('access-help').hidden = services.length > 0;
-      if (result.error) { $('access-help').hidden = false; notice(result.error,true); }
-      renderMappings();
-    } catch (error) { notice(errorText(error),true); $('access-help').hidden = false; }
-    finally { $('refresh').disabled = false; $('refresh').textContent = 'Refresh accessories'; }
+  function discover() {
+    const key = JSON.stringify(config.hueBridges);
+    if (discoveryPromise) return key === discoveryKey ? discoveryPromise : discoveryPromise.then(() => discover());
+    discoveryKey = key;
+    discovering = true; discoveryError = ''; $('refresh').disabled = true; $('refresh').textContent = 'Finding accessories…'; refreshPicker?.();
+    discoveryPromise = (async () => {
+      try {
+        const result = await homebridge.request('/discover', { hueBridges: config.hueBridges }); services = result.services; hueBridgeStatus = result.bridges || [];
+        const count = services.filter(s => s.selectable).length;
+        $('discovery-status').textContent = count ? `${count} controllable accessory services found. Choose a button section to create a mapping.` : 'No controllable accessories found yet. Check accessory control below, wait a few seconds, then try again.';
+        $('access-help').hidden = count > 0;
+        if (result.error) { discoveryError = result.error; $('access-help').hidden = false; notice(result.error,true); }
+        renderMappings(); renderRealBridges();
+      } catch (error) { discoveryError = errorText(error); notice(discoveryError,true); $('access-help').hidden = false; }
+      finally { discovering = false; $('refresh').disabled = false; $('refresh').textContent = 'Refresh accessories'; refreshPicker?.(); }
+    })().finally(() => { discoveryPromise = null; });
+    return discoveryPromise;
+  }
+  function renderRealBridges() {
+    const list = $('real-hue-list'); list.replaceChildren();
+    if (!config.hueBridges.length) list.append(element('p','No real Hue bridges connected. Add one to choose its devices alongside Homebridge accessories.','muted'));
+    for (const bridge of config.hueBridges) {
+      const card = element('article',undefined,'mapping-card'); card.append(element('h4',bridge.name),element('p',`${bridge.host} · ${bridge.id}`,'route'));
+      const status = hueBridgeStatus.find(item => item.id === bridge.id);
+      card.append(element('p',status ? status.connected ? `Connected · ${status.devices} lights, plugs, and groups available` : status.error : 'Connection saved in this draft. Find accessories to check it.','muted'));
+      const actions = element('div',undefined,'row-actions');
+      actions.append(button('Reconnect / change address',() => editRealBridge(bridge)),button('Remove bridge',async () => {
+        const prefix = `hue/${bridge.id}/`;
+        if (config.hueDevices.some(item => item.serviceId.startsWith(prefix)) || config.rokuButtons.some(item => item.action.serviceId.startsWith(prefix))) throw new Error('Remove this bridge’s button mappings before removing the bridge.');
+        config.hueBridges = config.hueBridges.filter(item => item.id !== bridge.id); services = services.filter(item => item.hueBridge !== bridge.id);
+        renderRealBridges(); renderMappings(); await changed();
+      },'btn btn-outline-secondary')); card.append(actions); list.append(card);
+    }
+  }
+  function editRealBridge(original) {
+    if (lastEditor) lastEditor.hidden = true;
+    refreshPicker = null;
+    const container = $('real-hue-editor'); lastEditor = container; container.hidden = false; container.replaceChildren(); editorOpen = true;
+    homebridge.disableSaveButton(); $('save').disabled = true;
+    container.append(element('h4',original ? 'Reconnect a real Hue bridge' : 'Connect a real Hue bridge'));
+    container.append(element('p','Find a bridge on your network or enter its address. Press the button on that physical bridge, then select Connect.'));
+    const foundSelect = select(); option(foundSelect,'','Choose a discovered bridge'); let found = [];
+    const host = textInput(original?.host || ''); host.placeholder = 'Enter your Hue bridge’s IP address'; host.autocomplete = 'off';
+    const scanStatus = element('p','','muted'); scanStatus.setAttribute('role','status');
+    const scan = button('Find Hue bridges',async e => {
+      e.disabled = true; scanStatus.textContent = 'Searching your local network…';
+      try {
+        found = (await homebridge.request('/hue/discover')).bridges;
+        foundSelect.replaceChildren(); option(foundSelect,'','Choose a discovered bridge');
+        for (const bridge of found) option(foundSelect,bridge.id,`${bridge.name} · ${bridge.host}`);
+        scanStatus.textContent = found.length ? 'Select a bridge below, or enter its address manually.' : 'No Hue bridges found. Enter the IP address shown in the Hue app; discovery may not cross VLANs.';
+      } finally { e.disabled = false; }
+    });
+    container.append(scan,scanStatus); field(container,'Discovered Hue bridges',foundSelect); field(container,'Hue bridge IPv4 address',host);
+    foundSelect.onchange = () => { const bridge = found.find(item => item.id === foundSelect.value); if (bridge) host.value = bridge.host; };
+    const close = () => { container.hidden = true; editorOpen = false; lastEditor = null; if (configValid) { $('save').disabled = false; homebridge.enableSaveButton(); } };
+    const actions = element('div',undefined,'row-actions');
+    actions.append(button('Connect Hue bridge',async e => {
+      if (!host.value.trim()) throw new Error('Enter the physical Hue bridge’s IP address first.');
+      e.disabled = true; scan.disabled = true; e.textContent = 'Connecting…';
+      try {
+        const selected = found.find(item => item.id === foundSelect.value && item.host === host.value.trim());
+        const { bridge } = await homebridge.request('/hue/pair', { host: host.value.trim(), expectedId: original?.id || selected?.id });
+        const descriptor = { id: bridge.id, host: bridge.host, name: original?.name || bridge.name };
+        const index = config.hueBridges.findIndex(item => item.id === descriptor.id);
+        if (index < 0) config.hueBridges.push(descriptor); else config.hueBridges[index] = descriptor;
+        close(); renderRealBridges(); await changed(); await discover();
+        notice('Hue bridge connected. Choose its devices in either button editor, then save settings and restart the plugin.');
+      } finally { e.disabled = false; scan.disabled = false; e.textContent = 'Connect Hue bridge'; }
+    },'btn btn-primary'),button('Cancel',close,'btn btn-outline-secondary'));
+    container.append(actions); host.focus();
   }
   async function test(action, buttonElement) {
     const original = buttonElement.textContent; buttonElement.disabled = true; buttonElement.textContent = 'Sending…';
@@ -78,10 +154,11 @@
       const items = config[kind === 'hue' ? 'hueDevices' : 'rokuButtons']; const list = $(`${kind}-list`); list.replaceChildren();
       if (!items.length) list.append(element('div',kind === 'hue' ? 'No accessories exposed yet. Choose “Expose an accessory” to begin.' : 'No button actions yet. Choose “Add a button action” to begin.','empty'));
       for (const item of items) {
-        const card = element('article',undefined,'mapping-card'); const head = element('div',undefined,'mapping-head'); head.append(element('h4',item.name));
-        if (kind === 'roku') head.append(element('span',item.key,'badge-status')); card.append(head);
+        const card = element('article',undefined,'mapping-card'); card.append(element('h4',kind === 'hue' ? `Harmony Device Name: ${item.name}` : item.name));
         const serviceId = kind === 'hue' ? item.serviceId : item.action.serviceId;
-        card.append(element('p',kind === 'hue' ? `${nameOf(serviceId)} · On: ${short(item.power.onValue)} · Off: ${short(item.power.offValue)}${item.brightness ? ' · Dimming enabled' : ''}` : `${nameOf(serviceId)} · ${readable(item.action.operation)}${item.action.operation !== 'toggle' ? ` ${short(item.action.value)}` : ''}`,'route'));
+        if (kind === 'roku') card.append(element('p',`Harmony Selector: Roku device ${item.key}`,'route'));
+        const action = kind === 'hue' ? `${controlName(serviceId,item.power.characteristic)} (short press: ${controlValue(serviceId,item.power.characteristic,item.power.onValue)}; long press: ${controlValue(serviceId,item.power.characteristic,item.power.offValue)})${item.brightness ? ` · Dimming: ${controlName(serviceId,item.brightness.characteristic)}` : ''}` : actionDescription(item.action);
+        card.append(element('p',`Mapped Action: ${nameOf(serviceId)} : ${action}`,'route'));
         const actions = element('div',undefined,'row-actions');
         if (kind === 'hue') {
           actions.append(button('Test on', e => test({ serviceId: item.serviceId, characteristic: item.power.characteristic, operation: 'set', value: item.power.onValue },e)));
@@ -93,32 +170,70 @@
     }
   }
   async function edit(kind, original) {
-    if (!services.length) { await discover(); if (!services.length) { tab('connection'); return; } }
+    const container = $(`${kind}-editor`);
+    if (!original && lastEditor === container && container.dataset.mode === 'new') { container.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); return; }
     if (lastEditor) lastEditor.hidden = true;
-    const container = $(`${kind}-editor`); lastEditor = container; container.hidden = false; container.replaceChildren(); editorOpen = true;
+    lastEditor = container; container.dataset.mode = original ? 'edit' : 'new'; container.hidden = false; container.replaceChildren(); editorOpen = true;
     homebridge.disableSaveButton(); $('save').disabled = true;
     const form = element('form'); container.append(form); form.append(element('h4', original ? 'Edit mapping' : kind === 'hue' ? 'Expose an accessory' : 'Add a button action'));
     const name = textInput(original?.name || ''); name.required = true; name.maxLength = 64;
-    field(form,'Name shown in your mappings',name);
+    field(form,kind === 'hue' ? 'Device name in Harmony' : 'Name Mapped Action',name,kind === 'hue' ? 'The virtual Hue device uses this name when Harmony imports it.' : 'A label in this plugin. Harmony uses the Roku command assigned below.');
     const filter = textInput(''); filter.placeholder = 'Search accessories'; field(form,'Find an accessory',filter);
-    const serviceSelect = select(); field(form,'Accessory',serviceSelect);
-    const controls = element('div'); form.append(controls); let buildMapping;
-    let selectedId = kind === 'hue' ? original?.serviceId : original?.action.serviceId;
-    function fillServices() {
-      const old = serviceSelect.value || selectedId; serviceSelect.replaceChildren(); option(serviceSelect,'','Choose an accessory');
-      for (const s of services.filter(s => `${s.name} ${s.type} ${s.bridgeName || ''}`.toLowerCase().includes(filter.value.toLowerCase()) || s.id === old)) option(serviceSelect,s.id,`${s.name} · ${readable(s.type)} · ${s.bridgeName || s.bridge.slice(-5)}${s.reachable ? '' : ' · unavailable'}`);
-      serviceSelect.value = old || '';
+    const source = select(); option(source,'','All devices'); option(source,'homebridge','Homebridge accessories'); option(source,'hue','Real Hue bridges'); field(form,'Device source',source);
+    const types = element('fieldset',undefined,'type-filters'); types.append(element('legend','Accessory types'));
+    const typeGrid = element('div',undefined,'type-grid'); types.append(typeGrid); const typeInputs = new Map();
+    for (const category of bootstrap.pickerCategories) {
+      const input = document.createElement('input'); input.type = 'checkbox'; input.checked = category.defaultSelected; input.setAttribute('aria-label',category.label);
+      const label = element('label',undefined,'check-label'), count = element('span','','type-count');
+      count.setAttribute('aria-hidden','true'); label.append(input,document.createTextNode(category.label),count); typeGrid.append(label);
+      typeInputs.set(category.id,{ input, count }); input.onchange = () => fillServices();
     }
-    fillServices(); filter.oninput = fillServices;
+    const filterActions = element('div',undefined,'row-actions');
+    const setTypes = mode => { for (const c of bootstrap.pickerCategories) typeInputs.get(c.id).input.checked = mode === 'all' || mode === 'default' && c.defaultSelected; fillServices(); };
+    filterActions.append(button('All types',() => setTypes('all')),button('Clear types',() => setTypes('none')),button('Default types',() => setTypes('default'))); types.append(filterActions); form.append(types);
+    const includeHarmony = document.createElement('input'); includeHarmony.type = 'checkbox'; includeHarmony.setAttribute('aria-label','Include homebridge-harmony accessories');
+    const harmonyLabel = element('label',undefined,'check-label'); harmonyLabel.append(includeHarmony,document.createTextNode('Include homebridge-harmony accessories')); form.append(harmonyLabel);
+    form.append(element('p','Harmony accessories and setup/maintenance services are hidden by default. Naming and identification properties are excluded from new actions.','muted'));
+    const filterStatus = element('p','','muted'); filterStatus.setAttribute('role','status'); form.append(filterStatus);
+    const refresh = button('Refresh accessory list',() => discover()); form.append(refresh);
+    const serviceSelect = select(); field(form,'Accessory',serviceSelect);
+    const selectionNote = element('p','','muted'); selectionNote.setAttribute('role','status'); form.append(selectionNote);
+    const controls = element('div'); form.append(controls); let buildMapping;
+    const originalId = kind === 'hue' ? original?.serviceId : original?.action.serviceId;
+    let selectedId = originalId;
+    const labelFor = s => `${s.name} · ${readable(s.type)} · ${s.bridgeName || `Homebridge ${s.bridge.slice(-5)}`}${s.reachable ? '' : ' · unavailable'}`;
+    function fillServices() {
+      const old = serviceSelect.value || selectedId, query = filter.value.trim().toLowerCase();
+      const available = services.filter(s => s.selectable && (!source.value || (s.source || 'homebridge') === source.value) && `${s.name} ${s.accessoryName || ''} ${s.type} ${s.bridgeName || ''}`.toLowerCase().includes(query));
+      const pool = available.filter(s => includeHarmony.checked || !s.harmony);
+      for (const [id, { count }] of typeInputs) count.textContent = `(${pool.filter(s => s.category === id).length})`;
+      const matches = pool.filter(s => typeInputs.get(s.category)?.input.checked);
+      serviceSelect.replaceChildren(); option(serviceSelect,'','Choose an accessory');
+      for (const s of matches) option(serviceSelect,s.id,labelFor(s));
+      const current = services.find(s => s.id === old), outside = current && !matches.some(s => s.id === old);
+      if (outside) { const group = element('optgroup'); group.label = 'Current selection · outside filters'; option(group,current.id,labelFor(current)); serviceSelect.append(group); }
+      serviceSelect.value = old || '';
+      const hiddenHarmony = includeHarmony.checked ? 0 : available.filter(s => s.harmony).length;
+      filterStatus.textContent = discovering ? 'Finding accessories… Your editor will update when discovery finishes.' : `${matches.length} matching controls.${hiddenHarmony ? ` ${hiddenHarmony} Harmony controls hidden.` : ''}${!matches.length ? ' Adjust the filters or refresh the accessory list.' : ''}${discoveryError ? ` ${discoveryError}` : ''}`;
+      selectionNote.textContent = outside ? 'Your selected accessory is outside these filters. Its mapping is preserved; choose another accessory to change it.' : selectedId && !current ? 'The saved target is unavailable. Refresh the list to edit it; its existing mapping has not been changed.' : '';
+      selectionNote.hidden = !selectionNote.textContent;
+      refresh.disabled = discovering; refresh.textContent = discovering ? 'Finding accessories…' : 'Refresh accessory list';
+    }
+    fillServices(); filter.oninput = fillServices; source.onchange = fillServices; includeHarmony.onchange = fillServices;
+    refreshPicker = () => { if (lastEditor !== container || !container.contains(form)) return; fillServices(); if (!buildMapping) drawControls(true); };
     function drawControls(useOriginal) {
       controls.replaceChildren(); buildMapping = null;
       const service = services.find(s => s.id === serviceSelect.value); if (!service) return;
+      useOriginal = useOriginal && service.id === originalId;
       if (!name.value) name.value = service.name;
-      const writable = service.characteristics.filter(c => c.canWrite); const chosen = select();
-      for (const c of writable) option(chosen,c.id,readable(c.type));
+      const savedControls = useOriginal ? kind === 'hue' ? [original?.power.characteristic,original?.brightness?.characteristic] : [original?.action.characteristic] : [];
+      const writable = service.characteristics.filter(c => c.canWrite && (c.canMap || savedControls.includes(c.id))); const chosen = select();
+      if (!writable.length) { controls.append(element('p','This service has no supported action controls. Choose another accessory.','muted')); return; }
+      for (const c of writable) option(chosen,c.id,`${readable(c.type)}${c.canMap ? '' : ' · existing metadata mapping'}`);
       const preferred = kind === 'hue' ? original?.power.characteristic : original?.action.characteristic;
       chosen.value = (useOriginal && preferred && writable.some(c => c.id === preferred)) ? preferred : (writable.find(c => ['On','Active'].includes(c.type)) || writable[0]).id;
-      field(controls,kind === 'hue' ? 'Control for On and Off' : 'Accessory control',chosen);
+      field(controls,kind === 'hue' ? 'Control for On and Off' : 'Accessory control',chosen,'Choose what the button changes, such as On, Active, or Lock Target State.');
+      if (writable.some(c => !c.canMap)) controls.append(element('p','This existing mapping includes a naming or setup property. It is preserved here; choose an operating control to use the button for a device action.','callout'));
       const detail = element('div'); controls.append(detail);
       function drawValues(useSaved) {
         detail.replaceChildren(); const c = writable.find(c => c.id === chosen.value);
@@ -134,7 +249,7 @@
           const updateOff = () => { off.disabled = ignore.checked; offLabel.style.opacity = ignore.checked ? '.5' : '1'; }; ignore.onchange = updateOff; updateOff();
           const dim = select(); option(dim,'','No dimming');
           for (const item of writable.filter(item => item.id !== c.id && numeric(item))) option(dim,item.id,readable(item.type));
-          dim.value = saved?.brightness?.characteristic || writable.find(item => item.type === 'Brightness' && item.id !== c.id)?.id || '';
+          dim.value = saved ? saved.brightness?.characteristic || '' : writable.find(item => item.type === 'Brightness' && item.id !== c.id)?.id || '';
           field(detail,'Dimming rocker',dim,'Optional: brightness, fan speed, or another numeric control.');
           const range = element('div',undefined,'form-grid'); detail.append(range); const min = textInput(0,'number'), max = textInput(100,'number'); min.step = max.step = 'any';
           field(range,'Lowest value',min); field(range,'Highest value',max);
@@ -159,9 +274,9 @@
       }
       chosen.onchange = () => drawValues(false); drawValues(useOriginal);
     }
-    serviceSelect.onchange = () => drawControls(false); drawControls(true);
+    serviceSelect.onchange = () => { selectedId = serviceSelect.value || null; fillServices(); drawControls(false); }; drawControls(true);
     const actions = element('div',undefined,'row-actions'); const submit = element('button',original ? 'Update mapping' : 'Add mapping','btn btn-primary'); submit.type = 'submit';
-    const closeEditor = () => { container.hidden = true; editorOpen = false; lastEditor = null; if (configValid) { $('save').disabled = false; homebridge.enableSaveButton(); } };
+    const closeEditor = () => { container.hidden = true; editorOpen = false; lastEditor = null; refreshPicker = null; if (configValid) { $('save').disabled = false; homebridge.enableSaveButton(); } };
     actions.append(submit,button('Cancel',closeEditor,'btn btn-outline-secondary')); form.append(actions);
     form.onsubmit = async event => {
       event.preventDefault(); if (!buildMapping) { notice('Choose an accessory first.',true); return; }
@@ -171,6 +286,7 @@
       catch (error) { notice(errorText(error),true); }
     };
     container.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); name.focus();
+    if (!services.length) await discover();
   }
   async function refreshStatus() {
     try {
@@ -179,7 +295,8 @@
       $('status-details').replaceChildren();
       if (!runtime.running) $('status-details').textContent = runtime.message;
       else {
-        for (const text of [`Hue: ${runtime.hue}`,`Roku: ${runtime.roku}`,`Discovery: ${runtime.discovery}`, ...(runtime.errors || [])]) $('status-details').append(element('div',text));
+        for (const text of [`Hue: ${runtime.hue}`,`Roku: ${runtime.roku}`,`Discovery: ${runtime.discovery}`, ...(runtime.errors || []), ...(runtime.accessoryError ? [runtime.accessoryError] : [])]) $('status-details').append(element('div',text));
+        for (const bridge of runtime.realHueBridges || []) $('status-details').append(element('div',`${bridge.name}: ${bridge.connected ? 'connected' : bridge.error}`));
         if (latestHash && latestHash !== runtime.configHash) $('status-details').append(element('strong','The running configuration differs from your draft. Save and restart before pairing.'));
       }
       $('pair').disabled = !runtime.running || !runtime.hue?.startsWith('Listening') || latestHash !== runtime.configHash;
@@ -210,12 +327,16 @@
       }
       document.querySelectorAll('[data-tab]').forEach(e => e.onclick = () => tab(e.dataset.tab));
       $('save').onclick = () => save().catch(error => notice(errorText(error),true)); $('refresh').onclick = discover;
+      $('add-real-hue').onclick = () => editRealBridge();
       $('add-hue').onclick = () => edit('hue').catch(error => notice(errorText(error),true)); $('add-roku').onclick = () => edit('roku').catch(error => notice(errorText(error),true));
       $('refresh-status').onclick = refreshStatus;
       $('pair').onclick = async () => { try { await homebridge.request('/pair'); notice('Pairing is open. Continue adding Philips Hue in Harmony.'); await refreshStatus(); } catch(error) { notice(errorText(error),true); } };
-      renderMappings(); await changed(); $('restart-note').hidden = true; await refreshStatus();
+      for (const e of document.querySelectorAll('[data-ready]')) e.disabled = false;
+      $('loading-status').hidden = true;
+      renderMappings(); renderRealBridges(); await changed(); $('restart-note').hidden = true; await refreshStatus();
+      if (config.hueDevices.length || config.rokuButtons.length) void discover();
       setInterval(() => { if (!document.hidden && !$('panel-pair').hidden) void refreshStatus(); },5000);
-    } catch (error) { notice(errorText(error),true); }
+    } catch (error) { $('loading-status').textContent = 'Settings could not load. Close and reopen this screen to retry.'; notice(errorText(error),true); }
   }
   void initialize();
 })();
