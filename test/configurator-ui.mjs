@@ -11,7 +11,13 @@ const artifacts=join(process.cwd(),'local-work','artifacts');await mkdir(artifac
 const directory=await mkdtemp(join(artifacts,'configurator-ui-')), imported=nativeFixture();let offline=false,pending;
 const server=new ConfiguratorServer({directory,config:{...normalizeConfig(),advertiseAddress:'127.0.0.1',harmonyHubAddresses:[imported.host],configuratorPort:0},
   reader:{read:async()=>{if(offline)throw new ConfiguratorError('The test hub is offline.',502);return structuredClone(imported);},close(){}},
-  cloudFactory:()=>({target:null,async login(email,password,target){assert.equal(email,'fake@example.invalid');assert.equal(password,'fake-password');this.target=target;},async apply(change,submitted){submitted();pending=change;},async sync(progress){progress('Waiting for the test hub');if(pending)imported.resources.ActivityList.Activities[0].Name=pending.value;},close(){this.target=null;}})
+  cloudFactory:()=>({target:null,async login(email,password,target){assert.equal(email,'fake@example.invalid');assert.equal(password,'fake-password');this.target=target;},async preview(change){return {before:change.before ?? 1200,fingerprint:'browser-review'};},async apply(change,submitted){submitted();pending=change;},async sync(progress){
+    progress('Waiting for the test hub');if(!pending)return;
+    if(pending.kind==='activity') imported.resources.ActivityList.Activities[0].Name=pending.value;
+    else if(pending.field==='delays.powerOn') imported.resources.DeviceList.DevicesWithFeatures[0].DeviceFeatures[0].PowerOnDelay=pending.value;
+    else if(pending.field==='inputCommands') imported.resources.DeviceList.DevicesWithFeatures[0].DeviceFeatures[1].Inputs.find(i=>i.InputName===pending.inputName).Actions=pending.value.map((a,i)=>a.kind==='command'?{__type:'IRPressAction',IRCommandName:a.command,Duration:a.duration,Order:i+1}:{__type:'IRDelayAction',Delay:a.delay,Order:i+1});
+    pending=null;
+  },close(){this.target=null;}})
 });
 await server.start();
 await server.setPassword('browser-test-password','testuser');
@@ -63,7 +69,8 @@ try {
   await page.getByLabel('Proposed value',{exact:true}).fill('0');
   await page.getByRole('button',{name:'Save draft',exact:true}).click();
   await page.getByRole('heading',{name:'Game console · Power-on delay (ms)',exact:true}).waitFor();
-  assert.equal(await page.getByRole('button',{name:'Review cloud save',exact:true}).count(),0);
+  assert.equal(await page.getByRole('button',{name:'Review cloud save',exact:true}).count(),1);
+  assert.equal(await page.getByRole('button',{name:'Review cloud save',exact:true}).isDisabled(),true);
   await page.getByRole('button',{name:/^Devices/}).click();
   await page.getByRole('button',{name:'Set Input method for Game console',exact:true}).click();
   assert.equal(await page.getByLabel('Proposed value',{exact:true}).inputValue(),'');
@@ -139,13 +146,33 @@ try {
   await page.getByLabel('Proposed value',{exact:true}).fill('Play <game>');await page.getByRole('button',{name:'Save draft',exact:true}).click();
   await page.getByRole('heading',{name:'Review changes',exact:true}).waitFor();assert.equal(await page.locator('game').count(),0);
   await page.getByLabel('Logitech email',{exact:true}).fill('fake@example.invalid');await page.getByLabel('Logitech password',{exact:true}).fill('fake-password');
-  await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.getByText('Signed in for this hub.',{exact:false}).waitFor();
-  await page.getByRole('button',{name:'Review cloud save',exact:true}).click();await page.getByRole('button',{name:'Save to Logitech',exact:true}).click();
+  assert.equal(await page.getByLabel('Logitech password',{exact:true}).getAttribute('type'),'password');
+  await page.getByRole('button',{name:'Save Logitech login',exact:true}).click();await page.getByText('Logitech login saved on this server.',{exact:false}).waitFor();
+  assert.equal(await page.getByLabel('Logitech password',{exact:true}).inputValue(),'');
+  const activityChange=page.locator('section.panel').filter({has:page.getByRole('heading',{name:'Play a game · Activity name',exact:true})});
+  await activityChange.getByRole('button',{name:'Review cloud save',exact:true}).click();await page.getByRole('button',{name:'Save to Logitech',exact:true}).click();
   await page.getByText('Saved to Logitech · sync needed',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Compile & sync this hub',exact:true}).click();await page.getByText('Confirmed on hub',{exact:true}).waitFor({timeout:12000});
   await page.getByRole('button',{name:/^Devices/}).click();
   await page.getByRole('button',{name:'Edit Power-on delay (ms) for Living room display',exact:true}).click();await page.getByLabel('Proposed value',{exact:true}).fill('1500');await page.getByRole('button',{name:'Save draft',exact:true}).click();
-  await page.getByText('Draft only',{exact:true}).first().waitFor();assert.equal(await page.getByRole('button',{name:'Review cloud save',exact:true}).count(),0);
+  const powerChange=page.locator('section.panel').filter({has:page.getByRole('heading',{name:'Living room display · Power-on delay (ms)',exact:true})});
+  await powerChange.getByText('Draft only',{exact:true}).waitFor();
+  await powerChange.getByRole('button',{name:'Review cloud save',exact:true}).click();await page.getByText('Current Logitech value:',{exact:false}).waitFor();
+  await page.getByRole('button',{name:'Save to Logitech',exact:true}).click();
+  await page.getByRole('button',{name:'Compile & sync this hub',exact:true}).click();await page.getByText('Confirmed on hub',{exact:true}).nth(1).waitFor({timeout:12000});
+  await page.getByRole('button',{name:/^Devices/}).click();
+  await page.getByRole('button',{name:'Edit HDMI 1 commands for Living room display',exact:true}).click();
+  await page.getByLabel('Command 1',{exact:true}).selectOption('InputHdmi2');
+  await page.getByLabel('Hold duration 1 (ms)',{exact:true}).fill('400');
+  await page.getByRole('button',{name:'Add delay',exact:true}).click();await page.getByLabel('Delay 2 (ms)',{exact:true}).fill('250');
+  await page.getByRole('button',{name:'Move up step 2',exact:true}).click();
+  assert.equal(await page.getByLabel('Command 2',{exact:true}).inputValue(),'InputHdmi2');
+  assert.equal(await page.getByLabel('Hold duration 2 (ms)',{exact:true}).inputValue(),'400');
+  await page.screenshot({path:join(artifacts,'ui-configurator-input-editor.png'),fullPage:true});
+  await page.getByRole('button',{name:'Save draft',exact:true}).click();
+  const inputChange=page.locator('section.panel').filter({has:page.getByRole('heading',{name:'Living room display · HDMI 1 commands',exact:true})});
+  await inputChange.getByRole('button',{name:'Review cloud save',exact:true}).click();await page.getByRole('button',{name:'Save to Logitech',exact:true}).click();
+  await page.getByRole('button',{name:'Compile & sync this hub',exact:true}).click();await page.getByText('Confirmed on hub',{exact:true}).nth(2).waitFor({timeout:12000});
   await page.screenshot({path:join(artifacts,'ui-configurator-changes.png'),fullPage:true});
   await page.reload();await page.getByRole('heading',{name:'Living room display'}).waitFor();
   await page.getByRole('button',{name:'Setup Assistant',exact:true}).click();assert.equal(await page.getByLabel('Device type',{exact:true}).nth(1).inputValue(),'switch');
@@ -170,6 +197,10 @@ try {
   await page.screenshot({path:join(artifacts,'ui-configurator-help-mobile-dark.png'),fullPage:true});
   await page.getByRole('button',{name:'Close help',exact:true}).click();
   offline=true;await page.locator('#read').click();await page.getByText(/Last read failed:/).waitFor();assert.equal(await page.locator('#device-count').textContent(),'2');
+  await page.getByRole('button',{name:/^Review changes/}).click();
+  await page.getByRole('button',{name:'Forget saved login',exact:true}).click();
+  await page.getByRole('button',{name:'Save Logitech login',exact:true}).waitFor();
+  assert.equal(await page.getByLabel('Logitech password',{exact:true}).inputValue(),'');
   await page.getByRole('button',{name:'Sign out',exact:true}).click();
   await page.getByLabel('Configurator password',{exact:true}).waitFor();
   await page.reload();await page.getByLabel('Configurator password',{exact:true}).waitFor();

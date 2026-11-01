@@ -72,15 +72,15 @@ test('missing optional maps are reported without inventing data',async () => {
   const result=await new HubReader({Socket,fetchImpl:async()=>new Response(JSON.stringify({data:{activeRemoteId:800,accountId:900}}))}).read('192.0.2.70');
   assert.deepEqual(result.unavailable,['MapList','FunctionList']);assert.deepEqual(project(result).maps,[]);
 });
-test('draft validation accepts unknown supported values without inventing a before value or cloud write',() => {
+test('draft validation accepts unknown supported values without inventing a before value',() => {
   const s=modelFixture(),base={kind:'device',id:'101',field:'delays.powerOn',value:1500,version:s.version};
-  assert.equal(draftChange(base,s).cloud,null);assert.equal(draftChange(base,s).before,1000);
+  assert.equal(draftChange(base,s).cloud.resource,'PowerFeature');assert.equal(draftChange(base,s).before,1000);
   assert.throws(()=>draftChange({...base,version:'old'},s),/changed/);assert.throws(()=>draftChange({...base,value:-1},s),/valid value/);assert.throws(()=>draftChange({...base,field:'__proto__'},s),/not editable/);
   for (const [field,spec] of Object.entries(deviceFields)) {
-    if (['controlPort','inputOrder'].includes(field)) continue;
+    if (['controlPort','inputOrder','inputCommands'].includes(field) || spec.type === 'actions') continue;
     const value=spec.options?.[0][0] ?? (spec.type === 'boolean' ? false : 0);
     const change=draftChange({...base,id:'102',field,value},s);
-    assert.equal(change.before,null);assert.equal(change.value,value);assert.equal(change.cloud,null);
+    assert.equal(change.before,null);assert.equal(change.value,value);assert.ok(change.cloud);
     assert.equal(JSON.parse(JSON.stringify(change)).before,null);
   }
   for (const [field,value] of [['delays.powerOn',''],['delays.powerOn',null],['delays.input',-1],['delays.input',60001],['delays.interKey',10001],['repeats',6],['power.type',99],['power.alwaysOn','true'],['inputMethod','99']]) assert.throws(()=>draftChange({...base,id:'102',field,value},s),/valid value/);
@@ -97,7 +97,7 @@ test('input-method drafts retain missing values and label only recognized codes'
   delete feature.InputType;
   const s=project(source),base={kind:'device',id:'101',field:'inputMethod',version:s.version};
   assert.equal(s.devices[0].inputs.length,2);
-  for (const value of ['1','2','4']) { const d=draftChange({...base,value},s);assert.equal(d.before,null);assert.equal(d.cloud,null);assert.match(inputMethodLabel(value),/code/); }
+  for (const value of ['1','2','4']) { const d=draftChange({...base,value},s);assert.equal(d.before,null);assert.equal(d.cloud.resource,'InputFeature');assert.match(inputMethodLabel(value),/code/); }
   assert.equal(inputMethodLabel('99'),'Reported method code 99');assert.equal(inputMethodLabel(''),null);
 });
 test('reported defaults stay separate from unknown active values and preserve zero',() => {
@@ -108,7 +108,7 @@ test('reported defaults stay separate from unknown active values and preserve ze
 });
 test('input order drafts preserve every input, use stored order and never edit commands',() => {
   const s=modelFixture(),device=s.devices[0],before=structuredClone(device),base={kind:'device',id:device.id,field:'inputOrder',value:['HDMI 2','HDMI 1'],version:s.version};
-  const change=draftChange(base,s);assert.deepEqual(change.before,['HDMI 1','HDMI 2']);assert.equal(change.cloud,null);assert.deepEqual(device,before);
+  const change=draftChange(base,s);assert.deepEqual(change.before,['HDMI 1','HDMI 2']);assert.equal(change.cloud.resource,'InputFeature');assert.deepEqual(device,before);
   for (const value of [['HDMI 1'],['HDMI 2','HDMI 2'],['HDMI 1','HDMI 3']]) assert.throws(()=>draftChange({...base,value},s),/each imported input/);
   assert.throws(()=>draftChange({...base,value:['HDMI 1','HDMI 2']},s),/different value/);
   device.inputs[0].order=null;assert.equal(draftChange(base,s).before,null);
@@ -191,7 +191,7 @@ test('missing-value and input-order drafts persist, stay unconfirmed while absen
   let writes=0;f.server.cloudFactory=()=>({target:null,async login(){this.target={accountId:'900',remoteId:'800'};},close(){},async apply(){writes++;}});
   await f.call('login',{email:'fake@example.invalid',password:'test-only'});
   const power=await f.call('draft',{change:{kind:'device',id:'102',field:'delays.powerOn',value:0,version}});
-  assert.equal(power.status,200);assert.equal(power.result.drafts[0].before,null);assert.equal(power.result.drafts[0].cloud,null);
+  assert.equal(power.status,200);assert.equal(power.result.drafts[0].before,null);assert.equal(power.result.drafts[0].cloud.resource,'PowerFeature');
   let state=await f.call('refresh',{});assert.equal(state.result.drafts[0].status,'draft');
   assert.equal((await f.call('apply',{key:state.result.drafts[0].key,confirm:true})).status,409);
   assert.equal(writes,0);
@@ -230,6 +230,68 @@ test('a possibly submitted cloud save cannot be blindly replayed',async t => {
   const current=await f.call('state');assert.equal(current.result.drafts[0].status,'unconfirmed');
   assert.equal((await f.call('apply',{key,confirm:true})).status,409);assert.equal(writes,1);
   const disk=await readFile(join(f.directory,'configurator.json'),'utf8');assert.ok(!disk.includes('test-only'));assert.ok(!disk.includes('fake@example'));
+});
+test('device saves require a fresh session-bound review; previews and credentials never enter persisted state',async t=>{
+  const f=await serverFixture(t);let writes=0;
+  f.server.cloudFactory=()=>({target:null,async login(email,password,target){this.target=target;},close(){},async preview(){return {before:1200,fingerprint:'test-fingerprint'};},async apply(d,submitted,review){assert.equal(review.before,1200);writes++;submitted();}});
+  const first=await f.call('refresh',{});await f.call('login',{email:'fake@example.invalid',password:'review-password'});
+  const drafted=await f.call('draft',{change:{kind:'device',id:'102',field:'delays.powerOn',value:1500,version:first.result.snapshot.version}}), key=drafted.result.drafts[0].key;
+  assert.equal((await f.call('apply',{key,confirm:true})).status,409);assert.equal(writes,0);
+  let review=(await f.call('preview',{key})).result.cloud.review;
+  assert.equal(review.before,1200);assert.equal(review.fingerprint,undefined);
+  const disk=await readFile(join(f.directory,'configurator.json'),'utf8');assert.ok(!disk.includes(review.token));assert.ok(!disk.includes('test-fingerprint'));assert.ok(!disk.includes('review-password'));
+  assert.equal((await f.call('apply',{key,confirm:true,reviewToken:'bad'})).status,409);assert.equal(writes,0);
+  review=(await f.call('preview',{key})).result.cloud.review;
+  f.server.sessions.get(f.cookie.split('=')[1]).review.expires=Date.now()-1;
+  assert.equal((await f.call('apply',{key,confirm:true,reviewToken:review.token})).status,409);
+  review=(await f.call('preview',{key})).result.cloud.review;
+  await f.call('draft',{change:{kind:'device',id:'102',field:'delays.powerOn',value:1600,version:first.result.snapshot.version}});
+  assert.equal((await f.call('apply',{key,confirm:true,reviewToken:review.token})).status,409);
+  review=(await f.call('preview',{key})).result.cloud.review;
+  const saved=await f.call('apply',{key,confirm:true,reviewToken:review.token});assert.equal(saved.status,200);assert.equal(writes,1);assert.equal(saved.result.drafts[0].status,'cloud-saved');
+  assert.equal((await f.call('apply',{key,confirm:true,reviewToken:review.token})).status,409);
+});
+test('saved login automatically reconnects for cloud work; only pre-submission authentication failures retry',async t=>{
+  const f=await serverFixture(t);let logins=0,writes=0,expire=false,failAfterSubmit=false;
+  f.server.cloudFactory=()=>({target:null,async login(email,password,target){assert.equal(password,'reusable-test-secret');logins++;this.target=target;},close(){this.target=null;},async preview(){if(expire){expire=false;throw new ConfiguratorError('Session expired',401);}return {before:1000,fingerprint:'fingerprint'};},async apply(d,submitted){writes++;submitted();if(failAfterSubmit)throw new ConfiguratorError('Authentication failed after submission',401);}});
+  const first=await f.call('refresh',{});
+  let state=await f.call('login',{email:'fake@example.invalid',password:'reusable-test-secret',remember:true});assert.equal(state.result.cloud.saved,true);assert.equal(logins,1);
+  assert.ok(!JSON.stringify(state.result).includes('reusable-test-secret'));
+  await f.call('draft',{change:{kind:'device',id:'101',field:'delays.powerOn',value:1500,version:first.result.snapshot.version}});
+  const key='device/101//delays.powerOn';await f.call('logout',{});
+  state=await f.call('preview',{key});assert.equal(state.status,200);assert.equal(logins,2);
+  expire=true;state=await f.call('preview',{key});assert.equal(state.status,200);assert.equal(logins,3);
+  const exported=await f.call('export');assert.ok(!JSON.stringify(exported.result).includes('reusable-test-secret'));assert.equal(exported.result.cloud,undefined);
+  failAfterSubmit=true;const before=logins;
+  assert.equal((await f.call('apply',{key,confirm:true,reviewToken:state.result.cloud.review.token})).status,401);assert.equal(logins,before);assert.equal(writes,1);
+  state=await f.call('state');assert.equal(state.result.drafts[0].status,'unconfirmed');
+  state=await f.call('forget-login',{});assert.equal(state.result.cloud.saved,false);assert.equal(state.result.cloud.connected,false);
+  await assert.rejects(stat(join(f.directory,'configurator-logitech.key')),{code:'ENOENT'});
+});
+test('per-input sequence drafts verify the same input on hub refresh',async t=>{
+  const f=await serverFixture(t),first=await f.call('refresh',{}),value=[{kind:'command',command:'InputHdmi2',duration:400}];
+  const drafted=await f.call('draft',{change:{kind:'device',id:'101',field:'inputCommands',inputName:'HDMI 1',actionSources:[0],value,version:first.result.snapshot.version}});assert.equal(drafted.status,200);
+  const inputs=f.imported.resources.DeviceList.DevicesWithFeatures[0].DeviceFeatures[1].Inputs;inputs.reverse();
+  let state=await f.call('refresh',{});assert.equal(state.result.drafts[0].status,'draft');
+  inputs.find(i=>i.InputName==='HDMI 1').Actions=[{__type:'IRPressAction',IRCommandName:'InputHdmi2',Duration:400,Order:1}];
+  state=await f.call('refresh',{});assert.equal(state.result.drafts[0].status,'hub-confirmed');
+});
+test('saved Logitech login survives a server restart and a new browser session without returning credentials',async t=>{
+  const f=await serverFixture(t);let logins=0;
+  const factory=()=>({target:null,async login(email,password,target){assert.equal(email,'restart@example.invalid');assert.equal(password,'restart-secret');logins++;this.target=target;},async preview(){return {before:1000,fingerprint:'restart-test'};},close(){this.target=null;}});
+  f.server.cloudFactory=factory;
+  const first=await f.call('refresh',{});await f.call('login',{email:'restart@example.invalid',password:'restart-secret',remember:true});
+  await f.call('draft',{change:{kind:'device',id:'101',field:'delays.powerOn',value:1600,version:first.result.snapshot.version}});
+  await f.server.close();
+  const restarted=new ConfiguratorServer({directory:f.directory,config:f.server.config,reader:{async read(){return f.imported;},close(){}},cloudFactory:factory});
+  await restarted.start();t.after(()=>restarted.close());
+  const origin=`http://127.0.0.1:${restarted.port}`, access=new URL(restarted.accessLink().url).hash.slice(8);
+  const response=await fetch(`${origin}/api/session`,{method:'POST',headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify({access})});
+  const cookie=response.headers.get('set-cookie').split(';')[0], {csrf}=await response.json();
+  let state=await (await fetch(`${origin}/api/state`,{headers:{Cookie:cookie}})).json();assert.equal(state.cloud.saved,true);assert.equal(state.cloud.connected,false);assert.equal(logins,1);
+  const review=await fetch(`${origin}/api/preview`,{method:'POST',headers:{'Content-Type':'application/json',Origin:origin,Cookie:cookie,'X-Configurator-CSRF':csrf},body:JSON.stringify({host:'192.0.2.70',revision:state.revision,key:'device/101//delays.powerOn'})});
+  assert.equal(review.status,200);state=await review.json();assert.equal(logins,2);assert.equal(state.cloud.connected,true);
+  assert.ok(!JSON.stringify(state).includes('restart-secret'));assert.ok(!JSON.stringify(state).includes('restart@example.invalid'));
 });
 test('disabled by default; listener follows child-bridge lifecycle and cannot share emulator ports',async t => {
   assert.equal(normalizeConfig().configuratorEnabled,false);

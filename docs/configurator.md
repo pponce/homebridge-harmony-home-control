@@ -26,11 +26,12 @@ Device control settings preserve both numeric and text values from the hub. Know
 
 | Configuration | Inspect | Apply changes |
 | --- | --- | --- |
-| Devices, available command names, power actions and input actions | Imported when supplied by the hub | Inspect here; configure commands using Harmony |
-| Device power policy, power command type, repeats and power-on/input/inter-device/inter-key delays | Imported, with separately reported defaults when available | Draft here, including missing values; change in Harmony, sync, then read the hub to verify |
-| Infrared output assignment | Imported control port | Choose hub / mini blaster outputs in a draft when infrared transport is confirmed; apply in Harmony IR Assignments |
-| Input order | Inputs sorted by their stored order | Move inputs up/down in a draft; apply the order using Harmony Input Settings |
-| Input method | Reported method, separate from input names and commands | Choose a recognized method in a draft; apply using Harmony Input Settings and complete its command-selection questions |
+| Devices and available command names | Imported when supplied by the hub | Inspect here; add or learn commands using Harmony |
+| Power actions, per-input commands and shared input sequences | Command and delay steps | Add, remove, reorder and adjust steps; review and save to Logitech |
+| Device power policy, power command type, repeats and power-on/input/inter-device/inter-key delays | Imported, with separately reported defaults when available | Draft here, review the current cloud value, save to Logitech, then compile and sync |
+| Infrared output assignment | Imported control port | Choose hub / mini blaster outputs when infrared transport is confirmed; review and save to Logitech |
+| Input order | Inputs sorted by their stored order | Move inputs up/down in a draft; review and save to Logitech |
+| Input method | Reported method, separate from input names and commands | Draft a recognized method; cloud saving depends on the profile representation and existing commands. Unsupported methods use Harmony Input Settings |
 | Activity name and display order | Imported | Draft, review and save to Logitech; compile and sync separately |
 | Existing activity role power-on/off order | Imported | Draft, review and save to Logitech; compile and sync separately |
 | Delay before the next device | Imported when present | Draft here; apply using Harmony |
@@ -42,7 +43,7 @@ Device control settings preserve both numeric and text values from the hub. Know
 
 Use **Set draft** for a supported setting with no imported value. The editor starts blank and offers valid choices or an explicit numeric range; it does not assume zero or Yes. Device profiles may offer a narrower range or omit a setting in Harmony. Drafts are proposals, not proof of device capabilities. Activity fields without an original value also use manual Harmony guidance rather than a cloud save. If the hub continues to omit a setting after you apply it, the draft remains unconfirmed.
 
-**Input method** is separate from the input list and its commands. The list can be present without a method value. **Input sequence actions** shows shared Start, Next, Previous and Finish steps: opening an input menu, navigating it and confirming a selection. A direct command such as Input1 may need none of these steps. Use Harmony **Input Settings** to select a method and its commands; **Fix an input** changes a selection command. Raw action sequences remain informational here. Reordering inputs changes their list order, not HDMI socket names or assigned commands.
+**Input method** is separate from the input list and its commands. The list can be present without a method value. **Input sequence actions** shows shared Start, Next, Previous and Finish steps: opening an input menu, navigating it and confirming a selection. A direct command such as Input1 may need none of these steps. **Edit draft** beside an input edits its selection commands. Expand **Input sequence actions** to edit shared steps. Command steps offer an optional hold duration; delay steps insert a pause. Use **Add command**, **Add delay**, **Move up/down** and **Remove**, then review and save. Save the required commands before selecting a method, and compile/sync after completing the changes. Cloud method saves currently require a recognized numeric representation; named or unfamiliar representations use Harmony **Input Settings**. Complex device-state actions and other unsupported action types must also be configured in Harmony. Existing metadata on retained command/delay steps is preserved. Reordering inputs changes their list order, not HDMI socket names or assigned commands.
 
 This is a preview, not a complete replacement for the Harmony application. Unknown vendor fields, raw IR codes, account details and credentials are not exposed in the inspector. FunctionList is requested to report resource availability; function-map interpretation is not implemented. Unsupported fields are informational and cannot be saved through an arbitrary JSON editor.
 
@@ -75,13 +76,20 @@ Local HTTP supports inspection, answers, suggestions, drafts and manual guidance
 - **HTTPS:** provide absolute paths to a certificate and private key in the plugin settings, then restart the child bridge. Use a certificate trusted by your browser, valid for the Homebridge IP address used in the link. The Homebridge process must be able to read both files.
 - **A localhost SSH tunnel:** forward local port 18081 to port 18081 on the Homebridge machine. Keep the local and remote port numbers equal. Open a fresh configurator access link, changing only its host to `127.0.0.1` while preserving the fragment. The listener accepts the configured LAN IPv4 address, `127.0.0.1`, or `localhost`; arbitrary hostnames and forwarded-origin headers are not trusted.
 
-Sign in under **Review changes** using a Logitech email/password account. Social and legacy sign-in methods are not supported. Credentials and session cookies stay in process memory and are discarded at logout or child-bridge restart. They are not saved in Homebridge configuration or exports. The selected hub’s account and remote IDs must match the login; another account or hub is never selected automatically.
+Under **Review changes → Logitech cloud**, enter a Logitech email/password account and choose:
 
-For a supported draft, choose **Review cloud save**. The dialog shows the exact old and proposed values. **Save to Logitech** reads the latest full activity, rejects a changed original value, updates only the selected scalar field, preserves the remaining XML, and reads the activity back. Multiple drafts are separate saves, not an atomic transaction.
+- **Save Logitech login:** verifies the account against this hub and saves the login encrypted on this server. The configurator logs in automatically when cloud review, saves or sync need it, including after a Homebridge restart.
+- **Connect for this session:** creates a temporary connection without saving the password. Reconnect after the session expires or Homebridge restarts.
+
+The saved password is never filled back into the form. **Replace saved login** updates it; **Forget saved login** removes it and disconnects cloud sessions for this hub. The configurator’s own Sign out button ends browser access; it does not remove the saved Logitech login. A browser password manager can remember entries separately. Social and legacy Logitech sign-in methods are not supported. The selected hub’s account and remote IDs must match the login; another account or hub is never selected automatically.
+
+Saved Logitech logins use authenticated AES-256-GCM encryption in `configurator-logitech.json`, with a separate random key in `configurator-logitech.key`. Both files are readable/writable only by the Homebridge account (mode 0600). They are not part of Homebridge configuration or review exports. A server administrator, or anyone who obtains both files, can recover the password; encryption does not protect against a compromised Homebridge server. Session cookies remain in memory and are discarded when the connection closes or the child bridge restarts.
+
+For a supported draft, choose **Review cloud save**. Device reviews first fetch the current cloud value, including when the hub omitted it. **Save to Logitech** checks the cloud document again, rejects changes since review, updates the selected setting and reads it back. The review expires after five minutes and cannot authorize a different draft. Device ownership is checked against the selected account before saving. Activity saves check the latest value against the imported original. Unchanged vendor fields are preserved. Multiple drafts are separate saves, not an atomic transaction. A feature absent from the cloud must first be set up in Harmony.
 
 **Compile & sync this hub** compiles the cloud configuration and requests a hub sync. This sync applies the current cloud configuration for the hub, including changes made elsewhere. After the cloud indicates completion, the configurator reads the hub again. A draft is **Confirmed on hub** only when its imported value matches the proposal. This does not establish the physical device’s state.
 
-If a save is interrupted after submission, it is marked **Cloud save unconfirmed** and cannot be replayed automatically. Check the activity in Harmony, sync if appropriate, and read the hub. Discarding a record never undoes an applied change. There is no automatic rollback.
+If a save is interrupted after submission, it is marked **Cloud save unconfirmed** and cannot be replayed automatically. Check the setting in Harmony, sync if appropriate, and read the hub. Discarding a record never undoes an applied change. There is no automatic rollback.
 
 ## Local data and export
 
@@ -103,7 +111,7 @@ Nginx handles the browser certificate; leave the plugin's certificate paths empt
 
 After enabling the configurator and restarting the child bridge, open **Direct website sign-in** in the Homebridge plugin settings. Enter a username, enter and confirm a separate password of 8–256 characters, and choose **Set username and password**. Usernames are case-insensitive and use 1–64 letters, numbers, dots, underscores, @ signs or hyphens. This takes effect immediately; no bridge restart is needed. Use your HTTPS configurator URL directly and sign in.
 
-Select **Remember this browser for 30 days** to keep access across browser and child-bridge restarts. Without it, access lasts up to 12 hours and ends when the child bridge restarts; the cookie also expires with the browser session. Remembered sessions expire 30 days after sign-in, without extending on use. Logitech sign-in remains separate and is never remembered across bridge restarts.
+Select **Remember this browser for 30 days** to keep access across browser and child-bridge restarts. Without it, access lasts up to 12 hours and ends when the child bridge restarts; the cookie also expires with the browser session. Remembered sessions expire 30 days after sign-in, without extending on use. Logitech sign-in remains separate. It is reused across restarts only when you explicitly choose Save Logitech login.
 
 Use **Sign out** for this browser or **Sign out all browsers** to revoke every configurator session. Homebridge settings also provide session revocation and password replacement if you forget the password. Replacing the password revokes existing sessions and access links.
 

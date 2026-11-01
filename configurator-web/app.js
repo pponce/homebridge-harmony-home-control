@@ -97,11 +97,13 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
     return n;
   }
   function actionsTable(actions) { return actions.length ? table(['Order','Action','Command / device','Duration / delay'],actions.map(a => [a.order,a.type,`${a.command || a.input || '—'}${a.deviceId ? ` · ${deviceName(a.deviceId)}` : ''}`,`${a.duration ?? '—'} / ${a.delay ?? '—'}`])) : p('No explicit actions supplied.'); }
-  function editButton(kind,item,field,label,role) {
-    const target={kind,id:item.id,field,role}, spec=settingSpec(target), value=draftValue(role === undefined ? item : item.roles[role],field);
+  function editButton(kind,item,field,label,role,inputName) {
+    const target={kind,id:item.id,field,role,...(inputName === undefined ? {} : {inputName})}, spec=settingSpec(target), value=draftValue(role === undefined ? item : item.roles[role],field,inputName);
     label ||= spec.label;
     const b = button(value === null ? 'Set draft' : 'Edit draft',() => openEdit(target,label,value,spec,item));
-    b.disabled = data.busy; b.setAttribute('aria-label',`${value === null ? 'Set' : 'Edit'} ${label} for ${item.name}`); return b;
+    b.disabled = data.busy || spec.type === 'actions' && value?.some(a=>a.kind === 'unsupported'); b.setAttribute('aria-label',`${value === null ? 'Set' : 'Edit'} ${label} for ${item.name}`);
+    if(b.disabled && !data.busy) b.title='This sequence contains an action type that must be configured in Harmony.';
+    return b;
   }
   function renderDevices(content,s) {
     content.append(heading('Devices','Inspect the power policy, inputs, delays and commands Harmony has stored for each device.'));
@@ -116,7 +118,7 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
       ['Power command type',powerTypeLabel(d.power.type),'Unknown',editButton('device',d,'power.type')]
     ]));
     const missing=note('Not supplied means the imported value is unknown. It does not mean zero or a known default.'); missing.append(document.createTextNode(' '),helpButton('Missing values and defaults',helpText['Missing values and defaults'])); card.append(missing);
-    card.append(note('Device drafts are proposals. Apply them in Harmony, sync, then Read hub to verify. Settings available in Harmony can vary by device profile.'));
+    card.append(note('Edit a draft, review its current cloud value, then save to Logitech. Compile & sync updates the hub. Available settings depend on the device profile.'),button('Logitech login & review changes',()=>navigate('changes')));
     detail.append(card);
     const power = panel('Power behavior');
     power.append(table(['Setting','Value',''],[
@@ -124,18 +126,18 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
       ['Keep on between activities',d.power.betweenActivities,editButton('device',d,'power.betweenActivities')]
     ],'settings'));
     const actionDetail=e('div'); power.append(details('Power actions',actionDetail));
-    for (const [label,a] of [['On',d.power.on],['Off',d.power.off],['Toggle',d.power.toggle]]) { actionDetail.append(titleRow('h3',label),actionsTable(a)); }
+    for (const [key,label] of [['on','On'],['off','Off'],['toggle','Toggle']]) { actionDetail.append(titleRow('h3',label),actionsTable(d.power[key]),editButton('device',d,`power.${key}`)); }
     detail.append(power);
     const delays = panel('Timing'); const delayFields = [['powerOn','Power-on delay'],['input','Input delay'],['interDevice','Inter-device delay'],['interKey','Inter-key delay']];
     delays.append(table(['Delay','Value (ms)','Reported default (ms)',''],delayFields.map(([key,label]) => [label,d.delays[key],d.defaults?.delays?.[key] ?? 'Unknown',editButton('device',d,`delays.${key}`)]),'settings')); detail.append(delays);
     const inputs = panel('Inputs'); inputs.append(table(['Setting','Value',''],[['Input method',inputMethodLabel(d.inputMethod),editButton('device',d,'inputMethod')]]));
     if (!d.inputMethod && d.inputs.length) inputs.append(p('The hub supplied the input list and commands, but no input method. The list alone does not establish the method or a default.'));
-    inputs.append(d.inputs.length ? table(['Input order','Input','Commands'],orderedInputs(d).map(i => [i.order,i.name,i.actions.map(a => a.command || a.type).join(', ')])) : p('No inputs supplied by this device profile.'));
+    inputs.append(d.inputs.length ? table(['Input order','Input','Commands',''],orderedInputs(d).map(i => [i.order,i.name,i.actions.map(a => a.command || a.type).join(', '),editButton('device',d,'inputCommands',`${i.name} commands`,undefined,i.name)])) : p('No inputs supplied by this device profile.'));
     if (d.inputs.length && d.inputs.every(i => i.name) && new Set(d.inputs.map(i => i.name)).size === d.inputs.length) inputs.append(editButton('device',d,'inputOrder'));
-    const guidance=e('div'); guidance.append(p(helpText['Configure input switching']),p('In Harmony: Devices → this device → Input Settings. Complete the input-method questions, or use Fix an input to change its selection command. Sync, then Read hub.'),link('Harmony input settings guide ↗','https://support.myharmony.com/en-us/viewing-and-adjusting-your-devices-input-list'));
+    const guidance=e('div'); guidance.append(p(helpText['Configure input switching']),p('Edit the commands beside each input, or expand Input sequence actions for shared Start, Next, Previous and Finish commands. Review and save the required commands before changing the method; then compile and sync. Profiles with unsupported methods or action types still use Harmony → Devices → Input Settings.'),link('Harmony input settings guide ↗','https://support.myharmony.com/en-us/viewing-and-adjusting-your-devices-input-list'));
     inputs.append(details('Configure input switching',guidance));
-    const moreInput = e('div'); moreInput.append(p('These shared sequences are informational here. Use Harmony Input Settings to configure the commands.'));
-    for (const [key,label] of [['start','Start input selection'],['next','Next input'],['previous','Previous input'],['finish','Finish input selection']]) moreInput.append(titleRow('h3',label),actionsTable(d.inputActions[key] || []));
+    const moreInput = e('div'); moreInput.append(p('Edit command and delay steps, then review the cloud save. Saving a sequence does not run its commands.'));
+    for (const [key,label] of [['start','Start input selection'],['next','Next input'],['previous','Previous input'],['finish','Finish input selection']]) moreInput.append(titleRow('h3',label),actionsTable(d.inputActions[key] || []),editButton('device',d,`inputActions.${key}`));
     inputs.append(details('Input sequence actions',moreInput)); detail.append(inputs);
     const commands = panel(`${d.commands.length} available commands`,undefined,helpText['Available commands']), chips = e('div',undefined,'chips'); d.commands.forEach(c => chips.append(e('span',c,'chip'))); commands.append(details('Show command names',chips),e('p','Command names are inspected only; this page does not send them.','muted')); detail.append(commands);
     appendMaps(detail,s.maps.filter(m => m.deviceId === d.id));
@@ -252,17 +254,26 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
   const statusLabels = { draft:'Draft only',saving:'Saving',unconfirmed:'Cloud save unconfirmed',conflict:'Needs a fresh draft','cloud-saved':'Saved to Logitech · sync needed','hub-confirmed':'Confirmed on hub','changed-again':'Hub value changed again','manual-pending':'Waiting for app change + sync' };
   function renderChanges(content) {
     content.append(heading('Review changes','Draft locally, choose where to apply, then read the hub to verify the result. Discarding a draft does not undo an applied setting.'));
-    const cloud = panel('Logitech cloud', 'Preview support: activity name, display order, and existing role power-on/off order. Device settings and other fields use guided changes in the Harmony app.');
+    const cloud = panel('Logitech cloud', 'Save device settings, input and power command sequences, activity names, display order and role power order. Each change is reviewed before saving; compile and sync updates the hub.');
     const connected = data.cloud.connected && data.cloud.host === data.host;
+    if(data.cloud.saved) cloud.append(note('Logitech login saved on this server. It is used automatically for cloud changes and sync, including after Homebridge restarts. The saved password is never displayed.'));
+    if(data.cloud.savedNeedsUpdate) cloud.append(note('The saved login was verified for a different hub/account identity at this address. Read the hub and save the login again, or forget it.',true),button('Forget saved login',async()=>{await mutate('forget-login');render();}));
     if (connected) {
-      cloud.append(note('Signed in for this hub. Credentials are held in this session only.'));
-      const actions = e('div',undefined,'actions'); actions.append(button('Compile & sync this hub',async () => {await mutate('sync');render();},'primary'),button('Sign out of Logitech',async () => {await mutate('logout');render();})); cloud.append(actions);
-    } else if (data.cloud.loginAvailable) {
+      cloud.append(note(data.cloud.saved ? 'Connected to Logitech for this hub.' : 'Connected for this session. Your password has not been saved; reconnect after this session ends or Homebridge restarts.'));
+    }
+    if(connected || data.cloud.saved) {
+      const actions=e('div',undefined,'actions'), sync=button('Compile & sync this hub',async()=>{await mutate('sync');render();},'primary');sync.disabled=!data.cloud.loginAvailable || data.busy;actions.append(sync);
+      actions.append(data.cloud.saved ? button('Forget saved login',async()=>{await mutate('forget-login');render();message('Saved Logitech login removed and cloud sessions disconnected.');}) : button('Sign out of Logitech',async()=>{await mutate('logout');render();}));cloud.append(actions);
+    }
+    if (data.cloud.loginAvailable) {
       const form = e('form',undefined,'cloud-form'), email = e('input'), password = e('input'); email.type = 'email'; email.required = true; email.autocomplete = 'username'; password.type = 'password'; password.required = true; password.autocomplete = 'current-password';
+      email.maxLength=254;password.maxLength=1024;
       field(form,'Logitech email',email); field(form,'Logitech password',password);
-      const submit = e('button','Sign in','primary'); submit.type = 'submit'; form.append(submit);
-      form.onsubmit = async event => {event.preventDefault(); const credentials = {email:email.value,password:password.value}; password.value = ''; submit.disabled = true; try {await mutate('login',credentials);render();message('Logitech account matched to this hub.');} catch (error) {message(error.message,true);submit.disabled=false;} finally {credentials.password='';}};
-      cloud.append(form,e('p','Logitech email/password accounts only. Social and legacy logins are not supported.','muted'));
+      const submit = e('button',data.cloud.saved ? 'Replace saved login' : 'Save Logitech login','primary'); submit.type = 'submit';submit.value='save';
+      const temporary=e('button','Connect for this session');temporary.type='submit';temporary.value='session';form.append(submit);if(!data.cloud.saved)form.append(temporary);
+      form.onsubmit = async event => {event.preventDefault(); const credentials = {email:email.value,password:password.value,remember:event.submitter?.value !== 'session'}; password.value = ''; submit.disabled = temporary.disabled = true; try {await mutate('login',credentials);render();message(credentials.remember ? 'Logitech login verified and encrypted for automatic reuse on this server.' : 'Connected to Logitech for this session; password not saved.');} catch (error) {message(error.message,true);submit.disabled=temporary.disabled=false;} finally {credentials.password='';}};
+      const login=e('div');login.append(p('Save verifies this login against the selected hub, then stores it encrypted for automatic reuse. Connect for this session keeps only a temporary connection and does not save the password.'),form,note('Saved logins are encrypted on disk and excluded from review exports and Homebridge configuration. Anyone with administrator access to this server can still recover them. Your browser’s password manager is separate.'),e('p','Logitech email/password accounts only. Social and legacy logins are not supported.','muted'));
+      cloud.append(connected || data.cloud.saved ? details(data.cloud.saved ? 'Replace Logitech login' : 'Save a login for future use',login,helpText['Logitech password']) : login);
     } else cloud.append(note('Cloud sign-in requires HTTPS or a localhost SSH tunnel. Use an HTTPS reverse proxy, or optionally configure a certificate for the plugin’s webserver. Hub inspection, answers, drafts and manual guidance work on this HTTP connection.',true));
     if (data.sync?.host === data.host) cloud.append(note(`${data.sync.status}: ${data.sync.message}`,data.sync.status === 'failed'));
     content.append(cloud);
@@ -270,12 +281,12 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
     for (const d of data.drafts) {
       const card = panel(), head = e('div',undefined,'panel-head'), title = e('div'); title.append(titleRow('h2',`${d.name} · ${d.label}`,helpText['Change record'])); if (d.role !== undefined) title.append(p(`Activity role ${d.role+1}`)); head.append(title,badge(statusLabels[d.status] || d.status,!['draft','hub-confirmed'].includes(d.status))); card.append(head);
       const diff = e('div',undefined,'change-diff'); for (const [label,value] of [['Original value',d.before],['Proposed',d.value]]) {const block=e('div');block.append(helpLabel(label),e('strong',formatDraftValue(d,value)));diff.append(block);} card.append(diff);
-      if (d.before == null) card.append(note('The original value was not supplied; no default is assumed. This proposal uses the Harmony app. Verification remains pending if the hub continues to omit the setting.'));
+      if (d.before == null) card.append(note(`The original value was not supplied; no default is assumed. ${d.cloud ? 'Review cloud save reads the current Logitech value before you confirm.' : 'Apply this proposal in Harmony.'} Verification remains pending if the hub continues to omit the setting.`));
       if (d.error) card.append(note(d.error,true));
       if (d.status === 'conflict' || d.status === 'changed-again') card.append(note('Read the hub, inspect the current value and create a new draft. An existing draft is never silently rebased.',true));
-      if (d.status === 'unconfirmed') card.append(note('The save may have reached Logitech. Check the activity in Harmony, sync if appropriate, then Read hub. This change will not be replayed automatically.',true));
+      if (d.status === 'unconfirmed') card.append(note('The save may have reached Logitech. Check the setting in Harmony, sync if appropriate, then Read hub. This change will not be replayed automatically.',true));
       const actions = e('div',undefined,'actions');
-      if (d.cloud && d.status === 'draft') { const save = button('Review cloud save',() => confirmCloud(d),'primary'); save.disabled = !connected || data.busy; actions.append(save); }
+      if (d.cloud && d.status === 'draft') { const save = button('Review cloud save',() => confirmCloud(d),'primary'); save.disabled = !(connected || data.cloud.saved) || !data.cloud.loginAvailable || data.busy; actions.append(save); }
       if (d.status !== 'hub-confirmed') {
         const steps = e('div'), guide=settingSpec(d)?.guide;
         steps.append(p(`In Harmony, open ${d.kind === 'device' ? `Devices → ${d.name}` : `Activities → ${d.name} → Customize / Settings`}.`));
@@ -286,6 +297,7 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
           port:'Use Remote & Hub → IR Assignments to choose the hub and/or mini blaster outputs. Bluetooth does not use this IR assignment.',
           input:'Use Input Settings in Harmony. In MyHarmony, continue to the input list and drag inputs into the proposed order. Match the device’s actual menu or cycle. Reordering does not change the command assigned to each input.',
           inputMethod:'Use Input Settings in Harmony and choose the input-changing method. Complete the wizard to select its required commands, including any menu, navigation or confirmation steps. A method choice alone does not supply those commands.',
+          commands:'Use Input Settings → Fix an input for selection commands, or Power Settings for power commands. Apply the proposed commands and pauses in order.',
           role:'Open the activity’s startup/shutdown customization and adjust the named device’s order or delay. Keep the other device roles unchanged.',
           activity:'Use the activity settings to change its name or position in the activity list.',
         };
@@ -300,8 +312,33 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
   }
   function openEdit(target,label,before,spec,item) {
     const version = data.snapshot.version, revision = data.revision;
-    const block=e('div'); let readValue;
-    if (spec.type === 'input-order') {
+    const block=e('div'); let readValue,readSources;
+    if (spec.type === 'actions') {
+      const rows=(before || []).map((action,index)=>({...action,source:index})), list=e('div',undefined,'sequence-editor');
+      block.append(p('Choose commands available on this device. Hold duration is optional; leave it blank to keep the command’s normal duration. Delays and holds use milliseconds.'),list);
+      const draw=()=>{
+        list.replaceChildren();
+        rows.forEach((row,index)=>{
+          const line=e('fieldset',undefined,'sequence-row');line.append(e('legend',`Step ${index+1}: ${row.kind === 'command' ? 'Command' : 'Delay'}`));
+          if(row.kind === 'command') {
+            const cmd=select([['','Choose a command'],...item.commands.map(c=>[c,c])],row.command);cmd.required=true;cmd.onchange=()=>{row.command=cmd.value;};field(line,`Command ${index+1}`,cmd);
+            const duration=e('input');duration.type='number';duration.min=0;duration.max=60000;duration.step=1;duration.value=row.duration ?? '';duration.oninput=()=>{row.duration=duration.value===''?null:Number(duration.value);};field(line,`Hold duration ${index+1} (ms)`,duration);
+          } else {
+            const delay=e('input');delay.type='number';delay.required=true;delay.min=0;delay.max=60000;delay.step=1;delay.value=row.delay ?? '';delay.oninput=()=>{row.delay=delay.value===''?null:Number(delay.value);};field(line,`Delay ${index+1} (ms)`,delay);
+          }
+          const actions=e('div',undefined,'actions');
+          for(const [delta,text] of [[-1,'Move up'],[1,'Move down']]) {
+            const move=button(text,()=>{const next=index+delta;[rows[index],rows[next]]=[rows[next],rows[index]];draw();list.children[next].querySelector('input,select').focus();});move.disabled=index+delta<0 || index+delta>=rows.length;move.setAttribute('aria-label',`${text} step ${index+1}`);actions.append(move);
+          }
+          const remove=button('Remove',()=>{rows.splice(index,1);draw();addCommand.focus();});remove.setAttribute('aria-label',`Remove step ${index+1}`);actions.append(remove);line.append(actions);list.append(line);
+        });
+        addCommand.disabled=rows.length>=32 || !item.commands.length;addDelay.disabled=rows.length>=32;
+      };
+      const addCommand=button('Add command',()=>{rows.push({kind:'command',command:'',duration:null,source:null});draw();list.lastElementChild.querySelector('select').focus();});
+      const addDelay=button('Add delay',()=>{rows.push({kind:'delay',delay:null,source:null});draw();list.lastElementChild.querySelector('input').focus();});
+      const buttons=e('div',undefined,'actions');buttons.append(addCommand,addDelay);block.append(buttons);draw();
+      readValue=()=>rows.map(({source,...action})=>action);readSources=()=>rows.map(r=>r.source);
+    } else if (spec.type === 'input-order') {
       const names=orderedInputs(item).map(i => i.name), list=e('ol',undefined,'input-order-list');
       block.append(helpLabel('Input order'),p(helpText['Input order']),list);
       const draw = () => {
@@ -335,10 +372,18 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
     const contents=[e('p',`Value at last hub read: ${formatDraftValue(target,before)}`,'proposed-setting')];
     if (before === null) contents.push(note('No current value was supplied. Enter the setting you want; zero or a default has not been assumed.'));
     contents.push(block,note('Saving a draft does not change Harmony. Review changes explains how to apply it and verify the result.'));
-    showEditor(label,contents,'Save draft',async () => {await mutate('draft',{revision,change:{...target,version,value:readValue()}});view='changes';render();message('Change saved as a local draft.');});
+    showEditor(label,contents,'Save draft',async () => {await mutate('draft',{revision,change:{...target,version,value:readValue(),...(readSources ? {actionSources:readSources()} : {})}});view='changes';render();message('Change saved as a local draft.');});
   }
-  function confirmCloud(d) {
-    showEditor('Save this change to Logitech?',[p(`${d.name} · ${d.label}`),p(`${display(d.before)} → ${display(d.value)}`),note('This saves the activity in your Logitech account. The hub changes after compile and sync. Other fields are preserved; a changed cloud value blocks the save.')],'Save to Logitech',async () => {await mutate('apply',{key:d.key,confirm:true});render();message('Saved and read back from Logitech. Compile & sync to update the hub.');});
+  async function confirmCloud(d) {
+    let before=d.before,reviewToken;
+    if(d.kind === 'device') {
+      message('Reading the current Logitech setting for review…');await mutate('preview',{key:d.key});
+      const review=data.cloud.review;if(!review || review.key!==d.key) throw new Error('The cloud review expired. Try reviewing again.');
+      before=review.before;reviewToken=review.token;message('');
+    }
+    const contents=[p(`${d.name} · ${d.label}`),e('p',`Current ${d.kind === 'device' ? 'Logitech' : 'imported'} value:\n${formatDraftValue(d,before)}`,'proposed-setting'),e('p',`Proposed value:\n${formatDraftValue(d,d.value)}`,'proposed-setting'),note('This saves the setting in your Logitech account. The hub changes after compile and sync. A changed cloud value blocks the save.')];
+    if(d.before===null) contents.push(note('The hub did not supply an original value. The cloud value above is what you are replacing.'));
+    showEditor('Save this change to Logitech?',contents,'Save to Logitech',async () => {await mutate('apply',{key:d.key,confirm:true,reviewToken});render();message('Saved and read back from Logitech. Compile & sync to update the hub.');});
   }
   $('edit-form').onsubmit = async event => {event.preventDefault();$('submit-editor').disabled=true;try{await editAction();$('editor').close();}catch(error){$('editor-error').textContent=error.message;$('editor-error').hidden=false;if(view==='changes')render();}finally{$('submit-editor').disabled=false;}};
   $('cancel-editor').onclick = $('close-editor').onclick = () => $('editor').close();
