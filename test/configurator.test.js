@@ -210,6 +210,18 @@ test('failed refresh preserves the prior import and surfaces staleness',async t 
   assert.equal((await f.call('refresh',{})).status,502);
   const {result}=await f.call('state');assert.equal(result.lastError,'Hub offline');assert.equal(result.snapshot.devices.length,2);
 });
+test('missing activity-role drafts verify the original device after roles move or disappear',async t => {
+  const f=await serverFixture(t),roles=f.imported.resources.ActivityList.Activities[0].Roles;
+  delete roles[1].PowerOnOrder;
+  const {result}=await f.call('refresh',{});
+  await f.call('draft',{change:{kind:'activity',id:'401',field:'powerOnOrder',role:1,value:2,version:result.snapshot.version}});
+  roles[0].PowerOnOrder=2;roles.reverse();
+  let state=await f.call('refresh',{});assert.equal(state.result.drafts[0].status,'draft');
+  roles[0].PowerOnOrder=2;
+  state=await f.call('refresh',{});assert.equal(state.result.drafts[0].status,'hub-confirmed');
+  roles.shift();
+  state=await f.call('refresh',{});assert.equal(state.result.drafts[0].status,'changed-again');
+});
 test('a possibly submitted cloud save cannot be blindly replayed',async t => {
   const f=await serverFixture(t);let writes=0;f.server.cloudFactory=()=>({target:null,login:async function(){this.target={accountId:'900',remoteId:'800'};},close(){},apply:async(d,submitted)=>{writes++;submitted();throw new ConfiguratorError('Transport interrupted',502);}});
   const {result}=await f.call('refresh',{});await f.call('login',{email:'fake@example.invalid',password:'test-only'});
