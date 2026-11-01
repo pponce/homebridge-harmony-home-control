@@ -13,6 +13,7 @@ import { HarmonyPlatform } from '../lib/platform.js';
 import { normalizeConfig,validateConfig } from '../lib/config.js';
 import { listen,closeServer } from '../lib/http.js';
 import { nativeFixture,modelFixture } from './configurator-fixtures.js';
+import { deviceFields, draftValue, connectionsFor, methodsFor, inputMethodLabel } from '../configurator-web/settings.js';
 
 test('device projection preserves native numeric control settings and labels only known mappings',() => {
   const snapshot=nativeFixture(), device=snapshot.resources.DeviceList.DevicesWithFeatures[0].Device;
@@ -71,11 +72,47 @@ test('missing optional maps are reported without inventing data',async () => {
   const result=await new HubReader({Socket,fetchImpl:async()=>new Response(JSON.stringify({data:{activeRemoteId:800,accountId:900}}))}).read('192.0.2.70');
   assert.deepEqual(result.unavailable,['MapList','FunctionList']);assert.deepEqual(project(result).maps,[]);
 });
-test('draft validation refuses stale, absent and unrecognized fields; device changes stay manual',() => {
+test('draft validation accepts unknown supported values without inventing a before value or cloud write',() => {
   const s=modelFixture(),base={kind:'device',id:'101',field:'delays.powerOn',value:1500,version:s.version};
   assert.equal(draftChange(base,s).cloud,null);assert.equal(draftChange(base,s).before,1000);
-  assert.throws(()=>draftChange({...base,version:'old'},s),/changed/);assert.throws(()=>draftChange({...base,value:-1},s),/valid value/);assert.throws(()=>draftChange({...base,id:'102'},s),/not supplied/);assert.throws(()=>draftChange({...base,field:'__proto__'},s),/not editable/);
+  assert.throws(()=>draftChange({...base,version:'old'},s),/changed/);assert.throws(()=>draftChange({...base,value:-1},s),/valid value/);assert.throws(()=>draftChange({...base,field:'__proto__'},s),/not editable/);
+  for (const [field,spec] of Object.entries(deviceFields)) {
+    if (['controlPort','inputOrder'].includes(field)) continue;
+    const value=spec.options?.[0][0] ?? (spec.type === 'boolean' ? false : 0);
+    const change=draftChange({...base,id:'102',field,value},s);
+    assert.equal(change.before,null);assert.equal(change.value,value);assert.equal(change.cloud,null);
+    assert.equal(JSON.parse(JSON.stringify(change)).before,null);
+  }
+  for (const [field,value] of [['delays.powerOn',''],['delays.powerOn',null],['delays.input',-1],['delays.input',60001],['delays.interKey',10001],['repeats',6],['power.type',99],['power.alwaysOn','true'],['inputMethod','99']]) assert.throws(()=>draftChange({...base,id:'102',field,value},s),/valid value/);
+  assert.throws(()=>draftChange({...base,id:'102',field:'controlPort',value:'1'},s),/infrared/);
+  s.devices[0].controlPort='';assert.equal(draftChange({...base,field:'controlPort',value:'2'},s).before,null);
   const a=draftChange({kind:'activity',id:'401',field:'powerOnOrder',role:0,value:2,version:s.version},s);assert.equal(a.cloud.field,'PowerOnOrder');assert.equal(a.cloud.roleId,'301');
+  s.activities[0].order=null;s.activities[0].roles[0].powerOnOrder=null;
+  for (const extra of [{field:'order'},{field:'powerOnOrder',role:0},{field:'nextDeviceDelay',role:1}]) {
+    const change=draftChange({kind:'activity',id:'401',value:1,version:s.version,...extra},s);assert.equal(change.before,null);assert.equal(change.cloud,null);
+  }
+});
+test('input-method drafts retain missing values and label only recognized codes',() => {
+  const source=nativeFixture(),feature=source.resources.DeviceList.DevicesWithFeatures[0].DeviceFeatures[1];
+  delete feature.InputType;
+  const s=project(source),base={kind:'device',id:'101',field:'inputMethod',version:s.version};
+  assert.equal(s.devices[0].inputs.length,2);
+  for (const value of ['1','2','4']) { const d=draftChange({...base,value},s);assert.equal(d.before,null);assert.equal(d.cloud,null);assert.match(inputMethodLabel(value),/code/); }
+  assert.equal(inputMethodLabel('99'),'Reported method code 99');assert.equal(inputMethodLabel(''),null);
+});
+test('reported defaults stay separate from unknown active values and preserve zero',() => {
+  const source=nativeFixture();delete source.resources.DeviceList.DevicesWithFeatures[0].DeviceFeatures[0].PowerOnDelay;
+  const devices=project(source).devices;
+  assert.equal(devices[0].delays.powerOn,null);assert.equal(devices[0].defaults.delays.powerOn,1200);assert.equal(devices[0].defaults.delays.interKey,0);
+  assert.equal(devices[1].delays.powerOn,null);assert.equal(devices[1].defaults.delays.powerOn,null);assert.equal(devices[1].repeats,null);assert.equal(devices[1].defaults.repeats,null);
+});
+test('input order drafts preserve every input, use stored order and never edit commands',() => {
+  const s=modelFixture(),device=s.devices[0],before=structuredClone(device),base={kind:'device',id:device.id,field:'inputOrder',value:['HDMI 2','HDMI 1'],version:s.version};
+  const change=draftChange(base,s);assert.deepEqual(change.before,['HDMI 1','HDMI 2']);assert.equal(change.cloud,null);assert.deepEqual(device,before);
+  for (const value of [['HDMI 1'],['HDMI 2','HDMI 2'],['HDMI 1','HDMI 3']]) assert.throws(()=>draftChange({...base,value},s),/each imported input/);
+  assert.throws(()=>draftChange({...base,value:['HDMI 1','HDMI 2']},s),/different value/);
+  device.inputs[0].order=null;assert.equal(draftChange(base,s).before,null);
+  device.inputs[0].order=2;device.inputs[1].order=1;assert.deepEqual(draftValue(device,'inputOrder'),['HDMI 2','HDMI 1']);
 });
 test('assistant rejects HDMI loops and keeps CEC advice dependent on user answers',() => {
   const s=modelFixture();
@@ -83,6 +120,32 @@ test('assistant rejects HDMI loops and keeps CEC advice dependent on user answer
   assert.ok(suggestions(s,{}).every(a=>a.confidence==='Needs your input'));
   const context=validateContext({devices:{102:{kind:'switch',wakeBy:'manual',sleepBy:'cec',cec:'on',offBehavior:'keep',destination:'101',port:'HDMI 2'}}},s);
   const advice=suggestions(s,context);assert.ok(advice.some(a=>a.id==='102/switch'));assert.ok(advice.some(a=>a.id==='102/cec-sleep'));assert.ok(advice.some(a=>a.confidence==='Possible mismatch'));
+});
+test('assistant preserves legacy cables and supports multiple outputs, return audio and independent controllers',() => {
+  const s=modelFixture();s.devices.push({...structuredClone(s.devices[0]),id:'103',name:'Second display'});
+  const saved=validateContext({devices:{102:{kind:'receiver',destination:'101',port:'HDMI 2'}}},s);
+  assert.deepEqual(connectionsFor(saved.devices[102]),[{destination:'101',port:'HDMI 2',outputPort:'',audioReturn:'unknown'}]);
+  const connections=[{destination:'101',port:'HDMI 2 (eARC)',outputPort:'OUT 1',audioReturn:'earc'},{destination:'103',port:'HDMI 1',outputPort:'OUT 2',audioReturn:'none'}];
+  const powerPaths=[{direction:'sleep',method:'cec',controller:'101',trigger:'TV off'},{direction:'sleep',method:'cec',controller:'103',trigger:'Second TV off'},{direction:'wake',method:'automation',controller:'external',trigger:'HomeKit button'}];
+  const context=validateContext({devices:{102:{kind:'receiver',cec:'off',connections,powerPaths}}},s);
+  assert.deepEqual(context.devices[102].connections,connections);assert.deepEqual(context.devices[102].powerPaths,powerPaths);
+  const advice=suggestions(s,context);assert.ok(advice.some(a=>a.id==='102/cec-off'));assert.ok(!advice.some(a=>a.id==='102/questions'));
+  assert.throws(()=>validateContext({devices:{102:{connections},103:{connections:[{destination:'102'}]}}},s),/loop/);
+  assert.throws(()=>validateContext({devices:{102:{connections:[{destination:'999'}]}}},s),/available setup answers/);
+  for (const path of [{...powerPaths[0],controller:'999'},{...powerPaths[0],method:'invalid'},{...powerPaths[0],controller:'102'}]) assert.throws(()=>validateContext({devices:{102:{powerPaths:[path]}}},s));
+});
+test('available power methods stay separate from preferred controllers and migrate older answers',() => {
+  const s=modelFixture(),legacy={kind:'receiver',wakeBy:'harmony',sleepBy:'cec',powerPaths:[{direction:'sleep',method:'automation',controller:'external',trigger:'HomeKit button'}]};
+  const migrated=validateContext({devices:{101:legacy}},s).devices[101];
+  assert.deepEqual(methodsFor(migrated,'wake'),['harmony']);assert.deepEqual(methodsFor(migrated,'sleep'),['cec','automation']);assert.equal(migrated.sleepBy,'cec');
+  const device={...legacy,cec:'off',powerMethods:{wake:['harmony','cec','automation'],sleep:['cec','automation']}};
+  let context=validateContext({devices:{101:device}},s),advice=suggestions(s,context);
+  assert.ok(advice.some(a=>a.id==='101/cec-off'));assert.ok(!advice.some(a=>a.id==='101/two-owners')); // Capability alone is not an active CEC wake path.
+  s.devices[0].power.type=2;
+  context=validateContext({devices:{101:{...device,sleepBy:'harmony'}}},s);advice=suggestions(s,context);
+  assert.ok(advice.some(a=>a.id==='101/preferred-sleep'));assert.ok(advice.some(a=>a.id==='101/toggle-sleep'));
+  for (const powerMethods of [null,[],{wake:'cec'},{wake:['cec','cec']},{wake:['invalid']}]) assert.throws(()=>validateContext({devices:{101:{...device,powerMethods}}},s));
+  const unknown=validateContext({devices:{101:{}}},s).devices[101];assert.deepEqual(methodsFor(unknown,'wake'),[]);
 });
 async function serverFixture(t, extraConfig = {}) {
   const directory=await temporary(t), imported=nativeFixture(); let reads=0,closed=false;
@@ -122,6 +185,25 @@ test('answers and drafts survive restart; stale pages conflict and refreshed imp
   f.imported.resources.DeviceList.DevicesWithFeatures[0].DeviceFeatures[0].PowerOnDelay=1500;
   const refreshed=await f.call('refresh',{});assert.equal(refreshed.result.drafts[0].status,'hub-confirmed');
   const exported=await f.call('export');assert.equal(exported.result.format,'harmony-setup-review');assert.ok(!JSON.stringify(exported.result).includes('remoteId'));
+});
+test('missing-value and input-order drafts persist, stay unconfirmed while absent, and verify only on a matching read',async t => {
+  const f=await serverFixture(t),first=await f.call('refresh',{}),version=first.result.snapshot.version;
+  let writes=0;f.server.cloudFactory=()=>({target:null,async login(){this.target={accountId:'900',remoteId:'800'};},close(){},async apply(){writes++;}});
+  await f.call('login',{email:'fake@example.invalid',password:'test-only'});
+  const power=await f.call('draft',{change:{kind:'device',id:'102',field:'delays.powerOn',value:0,version}});
+  assert.equal(power.status,200);assert.equal(power.result.drafts[0].before,null);assert.equal(power.result.drafts[0].cloud,null);
+  let state=await f.call('refresh',{});assert.equal(state.result.drafts[0].status,'draft');
+  assert.equal((await f.call('apply',{key:state.result.drafts[0].key,confirm:true})).status,409);
+  assert.equal(writes,0);
+  await f.call('manual',{key:state.result.drafts[0].key});state=await f.call('refresh',{});assert.equal(state.result.drafts[0].status,'manual-pending');
+  const order=['HDMI 2','HDMI 1'];
+  await f.call('draft',{change:{kind:'device',id:'101',field:'inputOrder',value:order,version:state.result.snapshot.version}});
+  const stored=await new ConfiguratorStore(f.directory).load();assert.equal(stored.hub('192.0.2.70').drafts[0].before,null);assert.deepEqual(stored.hub('192.0.2.70').drafts[1].value,order);
+  f.imported.resources.DeviceList.DevicesWithFeatures[1].DeviceFeatures.push({__type:'PowerFeature',PowerOnDelay:0});
+  const inputs=f.imported.resources.DeviceList.DevicesWithFeatures[0].DeviceFeatures[1].Inputs;inputs[0].InputOrder=2;inputs[1].InputOrder=1;
+  state=await f.call('refresh',{});assert.ok(state.result.drafts.every(d=>d.status==='hub-confirmed'));
+  inputs[0].InputOrder=1;inputs[1].InputOrder=2;
+  state=await f.call('refresh',{});assert.equal(state.result.drafts.find(d=>d.field==='inputOrder').status,'changed-again');
 });
 test('failed refresh preserves the prior import and surfaces staleness',async t => {
   const f=await serverFixture(t);await f.call('refresh',{});f.server.reader.read=async()=>{throw new ConfiguratorError('Hub offline',502);};

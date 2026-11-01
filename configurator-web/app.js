@@ -1,4 +1,5 @@
 import { helpText } from './help.js';
+import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inputMethodLabel, formatDraftValue, connectionsFor, pathsFor, powerMethods, methodsFor } from './settings.js';
 
 (() => {
   const $ = id => document.getElementById(id);
@@ -33,8 +34,12 @@ import { helpText } from './help.js';
   }
   function link(text,url) { const a = e('a',text); a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; return a; }
   function note(text,warn = false) { return e('p',text,`note${warn ? ' warning' : ''}`); }
-  function panel(title,description) { const n = e('section',undefined,'panel'); if (title) n.append(e('h2',title)); if (description) n.append(e('p',description,'muted')); return n; }
-  function details(title,contents) { const n = e('details'); n.append(e('summary',title),contents); return n; }
+  function titleRow(tag,title,explanation = helpText[title]) { const row=e('div',undefined,'section-title'); row.append(e(tag,title)); if (explanation) row.append(helpButton(title,explanation)); return row; }
+  function panel(title,description,explanation = helpText[title]) { const n = e('section',undefined,'panel'); if (title) n.append(titleRow('h2',title,explanation)); if (description) n.append(e('p',description,'muted')); return n; }
+  function details(title,contents,explanation = helpText[title]) {
+    const wrap=e('div',undefined,'disclosure'), n=e('details'); n.append(e('summary',title),contents); wrap.append(n);
+    if (explanation) wrap.append(helpButton(title,explanation)); return wrap;
+  }
   function field(parent,label,input,help) {
     const n = e('div',undefined,'field'), row = e('div',undefined,'field-label'), caption = e('label',label);
     input.id ||= `field-${++fieldSequence}`; caption.htmlFor = input.id; row.append(caption);
@@ -52,7 +57,7 @@ import { helpText } from './help.js';
     const body = e('tbody'); for (const row of rows) { const tr = e('tr'); row.forEach((item,index) => { const td = e('td'); td.append(settings && index === 0 && typeof item === 'string' ? helpLabel(item) : item instanceof Node ? item : document.createTextNode(display(item))); tr.append(td); }); body.append(tr); }
     t.append(body); wrap.append(t); return wrap;
   }
-  function heading(title,description) { const n = e('div',undefined,'page-head'), text = e('div'); text.append(e('h1',title),p(description)); n.append(text,badge('Imported + your context')); return n; }
+  function heading(title,description) { const n = e('div',undefined,'page-head'), text = e('div'); text.append(titleRow('h1',title),p(description)); n.append(text,badge('Imported + your context')); return n; }
   async function api(path,payload) {
     const response = await fetch(`/api/${path}`,{method:payload ? 'POST' : 'GET',credentials:'same-origin',headers:payload ? {'Content-Type':'application/json','X-Configurator-CSRF':csrf || ''} : {},body:payload ? JSON.stringify(payload) : undefined});
     const result = await response.json(); if (!response.ok) { const error = new Error(result.error || 'The request failed.'); error.status = response.status; throw error; } return result;
@@ -75,7 +80,7 @@ import { helpText } from './help.js';
     for (const n of document.querySelectorAll('[data-view]')) { if (n.dataset.view === view) n.setAttribute('aria-current','page'); else n.removeAttribute('aria-current'); }
     $('snapshot-status').textContent = data.lastError ? `Last read failed: ${data.lastError} Showing the previous import from ${time(s?.readAt)}.` : s ? `Imported from ${s.host} · ${time(s.readAt)}${data.busy ? ' · Operation in progress' : ''}` : 'No hub configuration imported yet.';
     const content = $('content'); content.replaceChildren();
-    if (!s) { const empty = e('div',undefined,'empty'); empty.append(e('h1','Get to know your Harmony setup'),p('Read your hub to see its devices, activities, power settings and inputs. Then add the HDMI and CEC details Harmony cannot see.'),button('Read hub',readHub,'primary')); content.append(empty); return; }
+    if (!s) { const empty = e('div',undefined,'empty'); empty.append(titleRow('h1','Get to know your Harmony setup',helpText['Devices']),p('Read your hub to see its devices, activities, power settings and inputs. Then add the HDMI and CEC details Harmony cannot see.'),button('Read hub',readHub,'primary')); content.append(empty); return; }
     ({devices:renderDevices,activities:renderActivities,assistant:renderAssistant,suggestions:renderSuggestions,changes:renderChanges})[view](content,s);
   }
   async function readHub() {
@@ -92,33 +97,47 @@ import { helpText } from './help.js';
     return n;
   }
   function actionsTable(actions) { return actions.length ? table(['Order','Action','Command / device','Duration / delay'],actions.map(a => [a.order,a.type,`${a.command || a.input || '—'}${a.deviceId ? ` · ${deviceName(a.deviceId)}` : ''}`,`${a.duration ?? '—'} / ${a.delay ?? '—'}`])) : p('No explicit actions supplied.'); }
-  function editButton(kind,item,field,label,value,type,role) {
-    const b = button('Edit draft',() => openEdit({kind,id:item.id,field,role},label,value,type));
-    b.disabled = value == null || data.busy; b.setAttribute('aria-label',`Edit ${label} for ${item.name}`); return b;
+  function editButton(kind,item,field,label,role) {
+    const target={kind,id:item.id,field,role}, spec=settingSpec(target), value=draftValue(role === undefined ? item : item.roles[role],field);
+    label ||= spec.label;
+    const b = button(value === null ? 'Set draft' : 'Edit draft',() => openEdit(target,label,value,spec,item));
+    b.disabled = data.busy; b.setAttribute('aria-label',`${value === null ? 'Set' : 'Edit'} ${label} for ${item.name}`); return b;
   }
   function renderDevices(content,s) {
     content.append(heading('Devices','Inspect the power policy, inputs, delays and commands Harmony has stored for each device.'));
     if (!s.devices.length) { content.append(note('This hub returned an empty device list.')); return; }
     const d = s.devices.find(x => x.id === selectedDevice) || s.devices[0]; selectedDevice = d.id;
     const split = e('div',undefined,'split'), detail = e('div'); split.append(items(s.devices,d.id,id => {selectedDevice = id; render();}),detail); content.append(split);
-    const card = panel(), head = e('div',undefined,'panel-head'), title = e('div'); title.append(e('h2',d.name),p([d.manufacturer,d.model].filter(Boolean).join(' · '))); head.append(title,badge('Imported')); card.append(head);
-    card.append(table(['Setting','Value'],[['Control transport',d.transportLabel || d.transport || 'Not reported by hub'],['Control port',d.controlPortLabel || d.controlPort || 'Not reported by hub'],['Command repeats',d.repeats],['Power command type',d.power.type === 1 ? 'Separate On / Off' : d.power.type === 2 ? 'Toggle' : d.power.type]]));
-    card.append(note('Device power and delay changes can be drafted here. Apply them in the Harmony app, sync, then Read hub to verify.'));
+    const card = panel(), head = e('div',undefined,'panel-head'), title = e('div'); title.append(titleRow('h2',d.name,helpText['Device details']),p([d.manufacturer,d.model].filter(Boolean).join(' · '))); head.append(title,badge('Imported')); card.append(head);
+    card.append(table(['Setting','Imported','Reported default',''],[
+      ['Control transport',d.transportLabel || d.transport || 'Not reported by hub','Unknown',p('Determined by the device profile')],
+      ['Control port',d.controlPortLabel || d.controlPort || 'Not reported by hub','Unknown',isInfrared(d) ? editButton('device',d,'controlPort') : p(d.transport ? 'IR assignment requires infrared control' : 'Read hub to identify the transport')],
+      ['Command repeats',d.repeats,d.defaults?.repeats ?? 'Unknown',editButton('device',d,'repeats')],
+      ['Power command type',powerTypeLabel(d.power.type),'Unknown',editButton('device',d,'power.type')]
+    ]));
+    const missing=note('Not supplied means the imported value is unknown. It does not mean zero or a known default.'); missing.append(document.createTextNode(' '),helpButton('Missing values and defaults',helpText['Missing values and defaults'])); card.append(missing);
+    card.append(note('Device drafts are proposals. Apply them in Harmony, sync, then Read hub to verify. Settings available in Harmony can vary by device profile.'));
     detail.append(card);
     const power = panel('Power behavior');
     power.append(table(['Setting','Imported',''],[
-      ['Harmony skips all power commands',d.power.alwaysOn,editButton('device',d,'power.alwaysOn','Harmony skips all power commands',d.power.alwaysOn,'boolean')],
-      ['Keep on between activities',d.power.betweenActivities,editButton('device',d,'power.betweenActivities','Keep on between activities',d.power.betweenActivities,'boolean')]
+      ['Harmony skips all power commands',d.power.alwaysOn,editButton('device',d,'power.alwaysOn')],
+      ['Keep on between activities',d.power.betweenActivities,editButton('device',d,'power.betweenActivities')]
     ],'settings'));
-    power.append(details('Power actions',e('div'))); const actionDetail = power.lastChild.lastChild;
-    for (const [label,a] of [['On',d.power.on],['Off',d.power.off],['Toggle',d.power.toggle]]) { actionDetail.append(e('h3',label),actionsTable(a)); }
+    const actionDetail=e('div'); power.append(details('Power actions',actionDetail));
+    for (const [label,a] of [['On',d.power.on],['Off',d.power.off],['Toggle',d.power.toggle]]) { actionDetail.append(titleRow('h3',label),actionsTable(a)); }
     detail.append(power);
     const delays = panel('Timing'); const delayFields = [['powerOn','Power-on delay'],['input','Input delay'],['interDevice','Inter-device delay'],['interKey','Inter-key delay']];
-    delays.append(table(['Delay','Imported (ms)',''],delayFields.map(([key,label]) => [label,d.delays[key],editButton('device',d,`delays.${key}`,`${label} (ms)`,d.delays[key],key === 'interKey' ? 10000 : 60000)]),'settings')); detail.append(delays);
-    const inputs = panel('Inputs'), inputMethod = p(''); inputMethod.append(helpLabel('Input method'),document.createTextNode(`: ${display(d.inputMethod)}`)); inputs.append(inputMethod);
-    inputs.append(d.inputs.length ? table(['Order','Input','Commands'],d.inputs.map(i => [i.order,i.name,i.actions.map(a => a.command || a.type).join(', ')])) : p('No inputs supplied by this device profile.'));
-    const moreInput = e('div'); for (const [label,a] of Object.entries(d.inputActions)) moreInput.append(e('h3',label),actionsTable(a)); inputs.append(details('Input sequence actions',moreInput)); detail.append(inputs);
-    const commands = panel(`${d.commands.length} available commands`), chips = e('div',undefined,'chips'); d.commands.forEach(c => chips.append(e('span',c,'chip'))); commands.append(details('Show command names',chips),e('p','Command names are inspected only; this page does not send them.','muted')); detail.append(commands);
+    delays.append(table(['Delay','Imported (ms)','Reported default (ms)',''],delayFields.map(([key,label]) => [label,d.delays[key],d.defaults?.delays?.[key] ?? 'Unknown',editButton('device',d,`delays.${key}`)]),'settings')); detail.append(delays);
+    const inputs = panel('Inputs'); inputs.append(table(['Setting','Imported',''],[['Input method',inputMethodLabel(d.inputMethod),editButton('device',d,'inputMethod')]]));
+    if (!d.inputMethod && d.inputs.length) inputs.append(p('The hub supplied the input list and commands, but no input method. The list alone does not establish the method or a default.'));
+    inputs.append(d.inputs.length ? table(['Input order','Input','Commands'],orderedInputs(d).map(i => [i.order,i.name,i.actions.map(a => a.command || a.type).join(', ')])) : p('No inputs supplied by this device profile.'));
+    if (d.inputs.length && d.inputs.every(i => i.name) && new Set(d.inputs.map(i => i.name)).size === d.inputs.length) inputs.append(editButton('device',d,'inputOrder'));
+    const guidance=e('div'); guidance.append(p(helpText['Configure input switching']),p('In Harmony: Devices → this device → Input Settings. Complete the input-method questions, or use Fix an input to change its selection command. Sync, then Read hub.'),link('Harmony input settings guide ↗','https://support.myharmony.com/en-us/viewing-and-adjusting-your-devices-input-list'));
+    inputs.append(details('Configure input switching',guidance));
+    const moreInput = e('div'); moreInput.append(p('These shared sequences are informational here. Use Harmony Input Settings to configure the commands.'));
+    for (const [key,label] of [['start','Start input selection'],['next','Next input'],['previous','Previous input'],['finish','Finish input selection']]) moreInput.append(titleRow('h3',label),actionsTable(d.inputActions[key] || []));
+    inputs.append(details('Input sequence actions',moreInput)); detail.append(inputs);
+    const commands = panel(`${d.commands.length} available commands`,undefined,helpText['Available commands']), chips = e('div',undefined,'chips'); d.commands.forEach(c => chips.append(e('span',c,'chip'))); commands.append(details('Show command names',chips),e('p','Command names are inspected only; this page does not send them.','muted')); detail.append(commands);
     appendMaps(detail,s.maps.filter(m => m.deviceId === d.id));
     detail.append(e('p',s.coverage,'muted')); if (s.unavailable.length) detail.append(note(`Unavailable resources: ${s.unavailable.join(', ')}.`,true));
   }
@@ -127,10 +146,10 @@ import { helpText } from './help.js';
     if (!s.activities.length) { content.append(note('This hub returned an empty activity list.')); return; }
     const a = s.activities.find(x => x.id === selectedActivity) || s.activities[0]; selectedActivity = a.id;
     const split = e('div',undefined,'split'), detail = e('div'); split.append(items(s.activities,a.id,id => {selectedActivity=id; render();}),detail); content.append(split);
-    const card = panel(a.name), activityType = p(''); activityType.append(helpLabel('Activity type'),document.createTextNode(`: ${display(a.type)}`)); card.append(activityType);
-    card.append(table(['Setting','Imported',''],[['Name',a.name,editButton('activity',a,'name','Activity name',a.name,'text')],['Display order',a.order,editButton('activity',a,'order','Activity display order',a.order,1000)]])); detail.append(card);
+    const card = panel(a.name,undefined,helpText['Activity details']), activityType = p(''); activityType.append(helpLabel('Activity type'),document.createTextNode(`: ${display(a.type)}`)); card.append(activityType);
+    card.append(table(['Setting','Imported',''],[['Name',a.name,editButton('activity',a,'name')],['Display order',a.order,editButton('activity',a,'order')]])); detail.append(card);
     const roles = panel('Power order & inputs','Configured order is not a measured execution trace. Harmony can skip devices already on; CEC and automations can act independently.');
-    const orderCell = (r,key,label,max=1000) => { const cell = e('div'); cell.append(e('div',display(r[key]),'value'),editButton('activity',a,key,`${deviceName(r.deviceId)} ${label}`,r[key],max,r.index)); return cell; };
+    const orderCell = (r,key,label) => { const cell = e('div'); cell.append(e('div',display(r[key]),'value'),editButton('activity',a,key,`${deviceName(r.deviceId)} ${label}`,r.index)); return cell; };
     roles.append(table(['Device / role','Selected input','On order','Off order','Next delay (ms)'],[...a.roles].sort((x,y)=>(x.powerOnOrder ?? 9999)-(y.powerOnOrder ?? 9999)).map(r => { const who = e('div'); who.append(e('strong',deviceName(r.deviceId)),e('div',r.type.split(':')[0],'muted')); return [who,r.input,orderCell(r,'powerOnOrder','power-on order'),orderCell(r,'powerOffOrder','power-off order'),orderCell(r,'nextDeviceDelay','next-device delay',60000)]; })));
     roles.append(note('Use Harmony’s activity setup to change participating devices, selected inputs, or start/end actions. Cloud editing here supports the name, display order, and existing role power-on/off order.')); detail.append(roles);
     for (const [label,actions] of [['Start actions',a.enter],['End actions',a.leave]]) { const card = panel(label); card.append(actionsTable(actions)); detail.append(card); }
@@ -139,31 +158,73 @@ import { helpText } from './help.js';
   function appendMaps(parent,maps) {
     const card = panel('Button maps');
     if (!maps.length) card.append(p('No matching button map was supplied. Remote-specific mappings may not be included in the hub resources.'));
-    for (const m of maps) { const block = e('div'); block.append(table(['Button','Group','Action'],m.buttons.map(b => [b.key,b.group,`${b.action.command || b.action.type} · ${deviceName(b.action.deviceId)}`]))); for (const s of m.sequences) block.append(e('h3',s.name),actionsTable(s.actions)); card.append(details(`Map ${m.id || 'without ID'}`,block)); }
+    for (const m of maps) { const block = e('div'); block.append(table(['Button','Group','Action'],m.buttons.map(b => [b.key,b.group,`${b.action.command || b.action.type} · ${deviceName(b.action.deviceId)}`]))); for (const s of m.sequences) block.append(titleRow('h3',s.name,helpText['Button sequence']),actionsTable(s.actions)); card.append(details(`Map ${m.id || 'without ID'}`,block,helpText['Button map'])); }
     parent.append(card);
   }
   const unknown = ['unknown','I’m not sure'];
   const cecHelp = kind => ({tv:'On Samsung, look for Anynet+ (HDMI-CEC) under the external-device settings. Names vary by model.',receiver:'On Anthem, inspect HDMI CEC power, input and standby settings separately. Record exceptions in your automation notes.',ps5:'Check Settings → System → HDMI. Record Device Link, One-Touch Play and Power Off Link separately in the notes.',switch:'Check System Settings → TV Settings / TV Output → Match TV Power State.', 'apple-tv':'Check Settings → Remotes and Devices → Control TVs and Receivers. Confirm the Harmony profile and Bluetooth pairing.'})[kind] || 'Check the device’s HDMI-CEC settings. Harmony cannot read this setting.';
+  function answerRows(parent,title,description,initial,addLabel,device,build) {
+    const section=e('section',undefined,'answer-list'), rows=e('div'), entries=[];
+    section.append(titleRow('h3',title),e('p',description,'muted'),rows); parent.append(section);
+    const changed=() => section.dispatchEvent(new Event('input',{bubbles:true}));
+    const addRow = (answer = {},focus = false) => {
+      if (entries.length >= 32) return;
+      const row=e('div',undefined,'answer-row'), grid=e('div',undefined,'assistant-grid'), fields={};
+      const add = (key,label,options,max = 100) => {
+        const input=options ? select(options,answer[key] ?? options[0][0]) : e('input');
+        if (!options) {input.value=answer[key] || ''; input.maxLength=max;}
+        if (options?.[0]?.[0] === '') input.required=true;
+        fields[key]=input; field(grid,label,input); return input;
+      };
+      build(add); const entry={row,fields}; entries.push(entry);
+      const remove=button('Remove',() => {entries.splice(entries.indexOf(entry),1);row.remove();addButton.disabled=false;changed();addButton.focus();});
+      remove.setAttribute('aria-label',`Remove ${title.toLowerCase()} row for ${device.name}`);
+      row.append(grid,remove); rows.append(row); addButton.disabled=entries.length>=32;
+      if (focus) {changed();Object.values(fields)[0]?.focus();}
+    };
+    const addButton=button(addLabel,() => addRow({},true)); addButton.setAttribute('aria-label',`${addLabel} for ${device.name}`); section.append(addButton);
+    for (const answer of initial) addRow(answer);
+    return () => entries.map(({fields}) => Object.fromEntries(Object.entries(fields).map(([key,input]) => [key,input.value])));
+  }
   function renderAssistant(content,s) {
     const formRevision = data.revision;
     content.append(heading('Fill in the missing pieces','Describe the physical wiring and the behavior you want. “I’m not sure” keeps a recommendation conditional until you test it.'));
-    const form = e('form'), controls = {}; content.append(form);
+    const form = e('form'), controls = {}, lists = {}, methodChecks = {}; content.append(form);
     for (const d of s.devices) {
-      const a = data.context.devices[d.id] || {}, card = panel(d.name,`${d.manufacturer} ${d.model}`), grid = e('div',undefined,'assistant-grid'); controls[d.id] = {};
+      const a = data.context.devices[d.id] || {}, card = panel(d.name,`${d.manufacturer} ${d.model}`,helpText['Setup device']), grid = e('div',undefined,'assistant-grid'); controls[d.id] = {};
       const add = (key,label,options,help) => { const input = select(options,a[key]); controls[d.id][key] = input; return {input,label:field(grid,label,input,help)}; };
       const kind = add('kind','Device type',[unknown,['tv','TV'],['receiver','AV receiver'],['ps5','PlayStation 5'],['switch','Nintendo Switch'],['apple-tv','Apple TV'],['other','Other device']]);
-      const dest = add('destination','HDMI output connects to',[unknown,['none','No HDMI output'],...s.devices.filter(x => x.id !== d.id).map(x => [x.id,x.name])]);
-      const port = e('input'); port.value = a.port || ''; port.maxLength = 100; port.placeholder = 'e.g. HDMI 2 or Game'; controls[d.id].port = port;
-      const portField = field(grid,'Input on that destination',port,'Use the label you see in the TV or receiver’s input menu.');
       const cec = add('cec','HDMI-CEC is',[unknown,['on','Enabled'],['off','Disabled']],cecHelp(a.kind));
-      add('wakeBy','Who should wake this device?',[unknown,['harmony','Harmony'],['cec','HDMI-CEC'],['manual','Controller / remote / manual'],['automation','HomeKit or another automation']]);
-      add('sleepBy','Who should put it to sleep?',[unknown,['harmony','Harmony'],['cec','HDMI-CEC'],['manual','Controller / remote / manual'],['automation','HomeKit or another automation']]);
+      methodChecks[d.id]={};
+      for (const [direction,label] of [['wake','Methods that can wake this device'],['sleep','Methods that can put it to sleep']]) {
+        const group=e('fieldset',undefined,'power-methods'), legend=e('legend'); group.setAttribute('aria-label',label);legend.append(helpLabel(label));group.append(legend);grid.append(group);
+        const selected=methodsFor(a,direction); methodChecks[d.id][direction]={};
+        for (const [method,name] of powerMethods) {
+          const checkbox=e('input');checkbox.type='checkbox';checkbox.checked=selected.includes(method);methodChecks[d.id][direction][method]=checkbox;
+          field(group,name,checkbox).classList.add('checkbox-field');
+        }
+      }
+      add('wakeBy','Preferred wake method for activities',[unknown,...powerMethods],'Choose the main method for activity startup. Multiple methods above may still be available.');
+      add('sleepBy','Preferred sleep method for All Off',[unknown,...powerMethods],'Choose the main method for activity shutdown. Record other senders and triggers below.');
       add('switchBehavior','When switching away',[unknown,['keep','Keep it awake'],['sleep','Let it sleep']]);
       add('offBehavior','When I press All Off',[unknown,['keep','Keep it awake'],['sleep','Put it to sleep / standby']]);
       add('coldStart','Cold startup test',[unknown,['works','Works as intended'],['misses-input','Power works; input is missed'],['misses-power','Device does not wake']]);
       add('transition','Switching between activities',[unknown,['works','Works as intended'],['wrong-input','Wrong input'],['unexpected-sleep','A device sleeps unexpectedly']]);
-      const update = () => { portField.hidden = ['unknown','none'].includes(dest.input.value); cec.label.querySelector('small').textContent = cecHelp(kind.input.value); };
-      kind.input.addEventListener('change',update); dest.input.addEventListener('change',update); update(); card.append(grid); form.append(card);
+      const update = () => { cec.label.querySelector('small').textContent = cecHelp(kind.input.value); };
+      kind.input.addEventListener('change',update); update(); card.append(grid); form.append(card);
+      lists[d.id] = {};
+      lists[d.id].connections=answerRows(card,'HDMI connections','One row per output cable. Record the sending port, receiving port and any ARC/eARC audio return.',connectionsFor(a),'Add HDMI connection',d,add => {
+        add('outputPort','Output port on this device').placeholder='e.g. HDMI OUT 1 (eARC)';
+        add('destination','HDMI output connects to',[unknown,['none','No connected device'],...s.devices.filter(x => x.id !== d.id).map(x => [x.id,x.name])]);
+        add('port','Input on that destination').placeholder='e.g. HDMI 2 (eARC)';
+        add('audioReturn','ARC/eARC on this connection',[unknown,['none','No audio return'],['arc','ARC'],['earc','eARC']]);
+      });
+      lists[d.id].powerPaths=answerRows(card,'Wake and sleep paths','Add additional devices, HomeKit/Homebridge buttons or automations. Describe when each acts.',pathsFor(a),'Add wake or sleep path',d,add => {
+        add('direction','Power action',[['','Choose wake or sleep'],['wake','Wake'],['sleep','Sleep / standby']]);
+        add('method','Control method',[['','Choose a method'],...powerMethods]);
+        add('controller','Controller or sending device',[unknown,['external','External controller / automation'],...s.devices.filter(x => x.id !== d.id).map(x => [x.id,x.name])]);
+        add('trigger','Trigger or button',null,240).placeholder='e.g. TV switches off or HomeKit Sleep button';
+      });
     }
     const auto = panel('HomeKit & other automations','Include triggers, waits, conditions and actions. Describe any wake/sleep exceptions or individual CEC switches here. These notes are retained for manual review.');
     const notes = e('textarea'); notes.value = data.context.automations || ''; notes.maxLength = 6000; field(auto,'Automation and CEC notes',notes,'For example: Receiver off → wait → check it is still off → send Harmony All Off. Include what should happen if another activity starts during the wait.'); form.append(auto);
@@ -172,7 +233,7 @@ import { helpText } from './help.js';
     form.onsubmit = async event => {
       event.preventDefault(); save.disabled = true;
       const context = {devices:{},automations:notes.value};
-      for (const [id,fields] of Object.entries(controls)) context.devices[id] = Object.fromEntries(Object.entries(fields).map(([key,input]) => [key,input.value]));
+      for (const [id,fields] of Object.entries(controls)) context.devices[id] = {...Object.fromEntries(Object.entries(fields).map(([key,input]) => [key,input.value])),connections:lists[id].connections(),powerPaths:lists[id].powerPaths(),powerMethods:Object.fromEntries(Object.entries(methodChecks[id]).map(([direction,checks]) => [direction,Object.keys(checks).filter(method => checks[method].checked)]))};
       try { await mutate('context',{context,revision:formRevision}); contextDirty = false; render(); message('Answers saved. Suggestions now use your wiring, power choices and test results.'); }
       catch (error) { message(error.message,true); save.disabled = false; }
     };
@@ -182,7 +243,7 @@ import { helpText } from './help.js';
     if (!data.suggestions.length) { content.append(note('No rule matched the imported settings and saved answers. Complete the Setup Assistant and record test outcomes; this does not prove the setup is optimal.')); return; }
     const grid = e('div',undefined,'recommendations'); content.append(grid);
     for (const a of data.suggestions) {
-      const card = panel(); card.append(e('p',a.device,'device-label'),e('h2',a.title),badge(a.confidence,a.confidence.includes('input') || a.confidence.includes('mismatch')));
+      const card = panel(); card.append(e('p',a.device,'device-label'),titleRow('h2',a.title,helpText['Suggestion']),badge(a.confidence,a.confidence.includes('input') || a.confidence.includes('mismatch')));
       const dl = e('dl'); for (const [label,text] of [['Current / reported',a.current],['Suggested next step',a.proposed],['Why',a.why],['How to test',a.test]]) { const term = e('dt'); term.append(helpLabel(label)); dl.append(term,e('dd',text)); } card.append(dl);
       const actions = e('div',undefined,'actions'); if (a.deviceId) actions.append(button('Inspect device',() => {selectedDevice=a.deviceId; navigate('devices');})); actions.append(button('Update answers',() => navigate('assistant'))); card.append(actions);
       if (a.source) card.append(link('Manufacturer guidance ↗',a.source)); grid.append(card);
@@ -207,16 +268,28 @@ import { helpText } from './help.js';
     content.append(cloud);
     if (!data.drafts.length) { content.append(note('No changes drafted yet. Open a device or activity and choose Edit draft.')); return; }
     for (const d of data.drafts) {
-      const card = panel(), head = e('div',undefined,'panel-head'), title = e('div'); title.append(e('h2',`${d.name} · ${d.label}`)); if (d.role !== undefined) title.append(p(`Activity role ${d.role+1}`)); head.append(title,badge(statusLabels[d.status] || d.status,!['draft','hub-confirmed'].includes(d.status))); card.append(head);
-      const diff = e('div',undefined,'change-diff'); for (const [label,value] of [['At import',d.before],['Proposed',d.value]]) {const block=e('div');block.append(helpLabel(label),e('strong',display(value)));diff.append(block);} card.append(diff);
+      const card = panel(), head = e('div',undefined,'panel-head'), title = e('div'); title.append(titleRow('h2',`${d.name} · ${d.label}`,helpText['Change record'])); if (d.role !== undefined) title.append(p(`Activity role ${d.role+1}`)); head.append(title,badge(statusLabels[d.status] || d.status,!['draft','hub-confirmed'].includes(d.status))); card.append(head);
+      const diff = e('div',undefined,'change-diff'); for (const [label,value] of [['At import',d.before],['Proposed',d.value]]) {const block=e('div');block.append(helpLabel(label),e('strong',formatDraftValue(d,value)));diff.append(block);} card.append(diff);
+      if (d.before == null) card.append(note('The original value was not supplied; no default is assumed. This proposal uses the Harmony app. Verification remains pending if the hub continues to omit the setting.'));
       if (d.error) card.append(note(d.error,true));
       if (d.status === 'conflict' || d.status === 'changed-again') card.append(note('Read the hub, inspect the current value and create a new draft. An existing draft is never silently rebased.',true));
       if (d.status === 'unconfirmed') card.append(note('The save may have reached Logitech. Check the activity in Harmony, sync if appropriate, then Read hub. This change will not be replayed automatically.',true));
       const actions = e('div',undefined,'actions');
       if (d.cloud && d.status === 'draft') { const save = button('Review cloud save',() => confirmCloud(d),'primary'); save.disabled = !connected || data.busy; actions.append(save); }
       if (d.status !== 'hub-confirmed') {
-        const steps = e('div'); steps.append(p(`In Harmony, open ${d.kind === 'device' ? `Devices → ${d.name} → Change Device Settings` : `Activities → ${d.name} → Customize / Settings`}.`),p(`${d.label}: change ${display(d.before)} to ${display(d.value)}. Sync the hub from Harmony, then return and choose Read hub.`));
-        if (d.kind === 'device') steps.append(p(d.field.startsWith('power.') ? 'Use Power Settings. “Always on” means Harmony sends no power commands. Keep-on-between-activities is a different policy.' : 'Use Device Delay Settings. Change one delay at a time and test cold startup, activity switches, and All Off.'));
+        const steps = e('div'), guide=settingSpec(d)?.guide;
+        steps.append(p(`In Harmony, open ${d.kind === 'device' ? `Devices → ${d.name}` : `Activities → ${d.name} → Customize / Settings`}.`));
+        const instructions={
+          delay:'Use Fix Delay in the mobile app, or Change Device Settings → Device delay settings in MyHarmony. Change one delay at a time and test cold startup, activity switches and All Off.',
+          power:'Use Power Settings. Choose the intended power behavior and, if required, the separate On/Off commands or toggle command. A setting cannot add a power capability the device lacks.',
+          repeats:'Use Command Repeats in the mobile app, or Change Device Settings → Device command repeats in MyHarmony. Adjust the repeat value and test for missed or duplicated commands.',
+          port:'Use Remote & Hub → IR Assignments to choose the hub and/or mini blaster outputs. Bluetooth does not use this IR assignment.',
+          input:'Use Input Settings in Harmony. In MyHarmony, continue to the input list and drag inputs into the proposed order. Match the device’s actual menu or cycle. Reordering does not change the command assigned to each input.',
+          inputMethod:'Use Input Settings in Harmony and choose the input-changing method. Complete the wizard to select its required commands, including any menu, navigation or confirmation steps. A method choice alone does not supply those commands.',
+          role:'Open the activity’s startup/shutdown customization and adjust the named device’s order or delay. Keep the other device roles unchanged.',
+          activity:'Use the activity settings to change its name or position in the activity list.',
+        };
+        steps.append(p(instructions[guide] || 'Use the corresponding Harmony device or activity setting.'),e('p',`${d.label}: ${formatDraftValue(d,d.value)}`,'proposed-setting'),p('Save in Harmony and sync the hub, then return and choose Read hub. If this profile does not expose the setting, leave the draft unapplied.'));
         steps.append(button('I changed it in Harmony',async () => {await mutate('manual',{key:d.key});render();message('Marked for verification. Sync from Harmony, then Read hub.');})); card.append(details('Apply using the Harmony app',steps));
       }
       actions.append(button('Discard record',async () => {await mutate('discard',{key:d.key});render();})); card.append(actions); content.append(card);
@@ -225,15 +298,44 @@ import { helpText } from './help.js';
   function showEditor(title,contents,submitLabel,run) {
     $('editor-title').textContent = title; $('editor-fields').replaceChildren(...contents); $('submit-editor').textContent = submitLabel; $('editor-error').hidden = true; editAction = run; $('editor').showModal();
   }
-  function openEdit(target,label,before,type) {
+  function openEdit(target,label,before,spec,item) {
     const version = data.snapshot.version, revision = data.revision;
-    let input;
-    if (type === 'boolean') input = select([['true','Yes'],['false','No']],String(before));
-    else {input=e('input');input.type=type==='text'?'text':'number';input.value=before;if(type==='text')input.maxLength=64;else{input.min=0;input.max=type;input.step=1;}input.required=true;}
-    const block = e('div');
-    const explanation = ({'delays.powerOn':'Power-on delay','delays.input':'Input delay','delays.interDevice':'Inter-device delay','delays.interKey':'Inter-key delay','power.alwaysOn':'Harmony skips all power commands','power.betweenActivities':'Keep on between activities',name:'Name',order:'Display order',powerOnOrder:'On order',powerOffOrder:'Off order',nextDeviceDelay:'Next delay (ms)'})[target.field];
-    field(block,'Proposed value',input,helpText[explanation]);
-    showEditor(label,[p(`Imported value: ${display(before)}`),block,note('Saving a draft does not change Harmony. Review it in Review changes to choose how to apply it.')],'Save draft',async () => {await mutate('draft',{revision,change:{...target,version,value:type==='boolean'?input.value==='true':type==='text'?input.value:Number(input.value)}});view='changes';render();message('Change saved as a local draft.');});
+    const block=e('div'); let readValue;
+    if (spec.type === 'input-order') {
+      const names=orderedInputs(item).map(i => i.name), list=e('ol',undefined,'input-order-list');
+      block.append(helpLabel('Input order'),p(helpText['Input order']),list);
+      const draw = () => {
+        list.replaceChildren();
+        names.forEach((name,index) => {
+          const row=e('li'), actions=e('div',undefined,'actions'); row.append(e('span',name));
+          for (const [delta,text] of [[-1,'Move up'],[1,'Move down']]) {
+            const move=button(text,() => {const next=index+delta;[names[index],names[next]]=[names[next],names[index]];draw();list.children[next].querySelector(`button[data-direction="${delta}"]`).focus();});
+            move.dataset.direction=delta;move.disabled=index+delta<0 || index+delta>=names.length;move.setAttribute('aria-label',`${text}: ${name}`);actions.append(move);
+          }
+          row.append(actions);list.append(row);
+        });
+      };
+      draw(); readValue=() => names;
+    } else {
+      let input;
+      const options=spec.type === 'boolean' ? [[true,'Yes'],[false,'No']] : spec.options;
+      if (options) input=select([['','Choose a value'],...options],before == null ? '' : String(before));
+      else {
+        input=e('input');input.type=spec.type==='text'?'text':'number';input.value=before ?? '';
+        if (spec.type==='text') input.maxLength=spec.maxLength;
+        else {input.min=spec.min;input.max=spec.max;input.step=1;}
+      }
+      input.required=true;
+      const range=!options && spec.type==='number' ? `Draft range: ${spec.min}–${spec.max}, in whole numbers. The Harmony app may offer a narrower range for this profile.` : '';
+      field(block,'Proposed value',input,[helpText[spec.help],range].filter(Boolean).join(' '));
+      const reportedDefault=target.field === 'repeats' ? item.defaults?.repeats : target.field.startsWith('delays.') ? item.defaults?.delays?.[target.field.split('.')[1]] : null;
+      if (reportedDefault != null) block.append(p(`Reported profile default: ${reportedDefault}. This is separate from the imported value and is not selected automatically.`));
+      readValue=() => {if(input.value==='')throw new Error('Choose or enter a proposed value.');return spec.type==='boolean'?input.value==='true':spec.type==='number'?Number(input.value):input.value;};
+    }
+    const contents=[e('p',`Imported value: ${formatDraftValue(target,before)}`,'proposed-setting')];
+    if (before === null) contents.push(note('No current value was supplied. Enter the setting you want; zero or a default has not been assumed.'));
+    contents.push(block,note('Saving a draft does not change Harmony. Review changes explains how to apply it and verify the result.'));
+    showEditor(label,contents,'Save draft',async () => {await mutate('draft',{revision,change:{...target,version,value:readValue()}});view='changes';render();message('Change saved as a local draft.');});
   }
   function confirmCloud(d) {
     showEditor('Save this change to Logitech?',[p(`${d.name} · ${d.label}`),p(`${display(d.before)} → ${display(d.value)}`),note('This saves the activity in your Logitech account. The hub changes after compile and sync. Other fields are preserved; a changed cloud value blocks the save.')],'Save to Logitech',async () => {await mutate('apply',{key:d.key,confirm:true});render();message('Saved and read back from Logitech. Compile & sync to update the hub.');});

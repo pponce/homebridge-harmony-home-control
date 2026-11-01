@@ -23,4 +23,23 @@ button.field-help-button:focus-visible{outline:2px solid var(--accent)}
 .change-diff .help-label>span{display:inline}
 #field-help{max-height:calc(100dvh - 30px);overflow:auto}
 #field-help-text{white-space:pre-line;overflow-wrap:anywhere}
+.section-title{display:flex;align-items:baseline;gap:8px;margin-bottom:12px;min-width:0}
+.section-title>h1,.section-title>h2,.section-title>h3{margin:0;min-width:0;overflow-wrap:anywhere}
+.section-title>.field-help-button{align-self:flex-start}
+.disclosure{position:relative;margin-top:18px}
+.disclosure>details{margin-top:0}
+.disclosure>details>summary{padding-right:38px;min-height:28px}
+.disclosure>.field-help-button{position:absolute;right:0;top:0}
+.answer-list{border-top:1px solid var(--line);padding-top:18px;margin-top:18px}
+.power-methods{min-width:0;margin:0;padding:12px;border:1px solid var(--line);border-radius:10px}
+.power-methods legend{font-size:14px;font-weight:600;max-width:100%;padding:0 4px}
+.power-methods .field{margin:8px 0}
+.answer-row{border:1px solid var(--line);border-radius:10px;padding:16px;margin:12px 0}
+.answer-row .assistant-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.input-order-list{padding-left:24px}
+.input-order-list li{padding:10px 0;border-bottom:1px solid var(--line)}
+.input-order-list .actions{margin-top:5px}
+.change-diff strong,.proposed-setting{white-space:pre-line}
+#editor{max-height:calc(100dvh - 30px);overflow:auto}
+@media(max-width:760px){.answer-row .assistant-grid{grid-template-columns:1fr}.answer-row{padding:12px}}
 @media(max-width:760px){.hub-field{width:100%;flex-wrap:wrap}.hub-field select{flex:1;min-width:140px}.items .field{min-width:150px;flex-shrink:0}.items .field-label button.field-help-button{min-width:28px;max-width:28px;padding:0}.field-label{gap:8px}}

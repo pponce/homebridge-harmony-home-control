@@ -2,9 +2,9 @@ import { project } from '../lib/configurator/model.js';
 export function nativeFixture() {
   return {host:'192.0.2.70',accountId:'900',remoteId:'800',readAt:'2026-01-01T10:00:00.000Z',unavailable:[],resources:{
     DeviceList:{DevicesWithFeatures:[
-      {Device:{'Id-':101,Name:'Living room display',Manufacturer:'Example',Model:'Display',Transport:1,ControlPort:7,InterDeviceDelay:500,InterKeyDelay:100,PressMinRepeats:1,SecretToken:'never-export-this'},Commands:[{Name:'PowerOn',Raw:'not-for-export'},{Name:'PowerOff'},{Name:'InputHdmi1'}],DeviceFeatures:[
-        {__type:'PowerFeature',PowerTypeId:1,PowerOnDelay:1000,IsPowerAlwaysOn:false,IsPoweredOnBetweenActivities:true,PowerOnActions:[{__type:'IRPressAction',IRCommandName:'PowerOn',Order:0,Duration:0}],PowerOffActions:[{__type:'IRPressAction',IRCommandName:'PowerOff'}]},
-        {__type:'InputFeature',InputType:'Discrete',InputDelay:500,Inputs:[{'Id-':201,InputName:'HDMI 1',InputOrder:1,Actions:[{__type:'IRPressAction',IRCommandName:'InputHdmi1'}]}]}
+      {Device:{'Id-':101,Name:'Living room display',Manufacturer:'Example',Model:'Display',Transport:1,ControlPort:7,InterDeviceDelay:500,InterKeyDelay:100,DefaultInterKeyDelay:0,PressMinRepeats:1,SecretToken:'never-export-this'},Commands:[{Name:'PowerOn',Raw:'not-for-export'},{Name:'PowerOff'},{Name:'InputHdmi1'},{Name:'InputHdmi2'}],DeviceFeatures:[
+        {__type:'PowerFeature',PowerTypeId:1,PowerOnDelay:1000,DefaultPowerOnDelay:1200,IsPowerAlwaysOn:false,IsPoweredOnBetweenActivities:true,PowerOnActions:[{__type:'IRPressAction',IRCommandName:'PowerOn',Order:0,Duration:0}],PowerOffActions:[{__type:'IRPressAction',IRCommandName:'PowerOff'}]},
+        {__type:'InputFeature',InputType:'Discrete',InputDelay:500,Inputs:[{'Id-':201,InputName:'HDMI 1',InputOrder:1,Actions:[{__type:'IRPressAction',IRCommandName:'InputHdmi1'}]},{'Id-':202,InputName:'HDMI 2',InputOrder:2,Actions:[{__type:'IRPressAction',IRCommandName:'InputHdmi2'}]}]}
       ]},
       {Device:{'Id-':102,Name:'Game console',Manufacturer:'Nintendo',Model:'Switch'},Commands:[{Name:'Home'}],DeviceFeatures:[]}
     ]},

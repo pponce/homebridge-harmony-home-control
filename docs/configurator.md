@@ -18,14 +18,17 @@ If the hub cannot be read, check its saved IPv4 address and TCP port 8088. Firmw
 
 ## What you can inspect and edit
 
-Select the small **?** beside a field or table column for an explanation. Help opens with a click, tap, or keyboard activation; **Close help** or **Escape** returns to the field without changing it. Help is also available in the Setup Assistant, sign-in forms, and draft editor.
+Select the small **?** beside a section, field, table column or expandable group for an explanation. Help opens with a click, tap, or keyboard activation; **Close help** or **Escape** returns without changing the field or expanding the group. Informational sections also explain where to configure the setting in Harmony.
 
 Device control settings preserve both numeric and text values from the hub. Known transport codes display names such as **Infrared (IR)** and **Bluetooth**. Infrared output assignments identify the hub and mini blasters while retaining the original code. Bluetooth control does not use an IR emitter assignment. Unfamiliar codes remain visible without assuming a meaning; **Not reported by hub** means no usable value was supplied. Choose **Read hub** after updating the plugin to refresh the imported settings.
 
 | Configuration | Inspect | Apply changes |
 | --- | --- | --- |
-| Devices, available command names, power actions and input actions | Imported when supplied by the hub | Inspect only |
-| Device power policy and power-on/input/inter-device/inter-key delays | Imported | Draft here, change in Harmony, sync, then read the hub to verify |
+| Devices, available command names, power actions and input actions | Imported when supplied by the hub | Inspect here; configure commands using Harmony |
+| Device power policy, power command type, repeats and power-on/input/inter-device/inter-key delays | Imported, with separately reported defaults when available | Draft here, including missing values; change in Harmony, sync, then read the hub to verify |
+| Infrared output assignment | Imported control port | Choose hub / mini blaster outputs in a draft when infrared transport is confirmed; apply in Harmony IR Assignments |
+| Input order | Inputs sorted by their stored order | Move inputs up/down in a draft; apply the order using Harmony Input Settings |
+| Input method | Reported method, separate from input names and commands | Choose a recognized method in a draft; apply using Harmony Input Settings and complete its command-selection questions |
 | Activity name and display order | Imported | Draft, review and save to Logitech; compile and sync separately |
 | Existing activity role power-on/off order | Imported | Draft, review and save to Logitech; compile and sync separately |
 | Delay before the next device | Imported when present | Draft here; apply using Harmony |
@@ -33,17 +36,25 @@ Device control settings preserve both numeric and text values from the hub. Know
 | Button maps and sequences | Available hub maps only | Inspect only; remote-specific maps may be absent |
 | HDMI wiring, CEC, desired power behavior and automation notes | Your answers | Saved locally in the configurator |
 
-This is a preview, not a complete replacement for the Harmony application. Unknown vendor fields, raw IR codes, account details and credentials are not exposed in the inspector. FunctionList is requested to report resource availability; function-map interpretation is not implemented. Unsupported or missing fields cannot be saved through an arbitrary JSON editor.
+**Not supplied** means the imported value is unknown. It does not mean zero, disabled, a known default, or that the device cannot support the setting. **Reported default** is shown only when the hub supplies a separate profile default; it is never substituted for a missing active value. **Unknown** in that column means no default was reported. Choose Read hub after an update to refresh these values.
+
+Use **Set draft** for a supported setting with no imported value. The editor starts blank and offers valid choices or an explicit numeric range; it does not assume zero or Yes. Device profiles may offer a narrower range or omit a setting in Harmony. Drafts are proposals, not proof of device capabilities. Activity fields without an original value also use manual Harmony guidance rather than a cloud save. If the hub continues to omit a setting after you apply it, the draft remains unconfirmed.
+
+**Input method** is separate from the input list and its commands. The list can be present without a method value. **Input sequence actions** shows shared Start, Next, Previous and Finish steps: opening an input menu, navigating it and confirming a selection. A direct command such as Input1 may need none of these steps. Use Harmony **Input Settings** to select a method and its commands; **Fix an input** changes a selection command. Raw action sequences remain informational here. Reordering inputs changes their list order, not HDMI socket names or assigned commands.
+
+This is a preview, not a complete replacement for the Harmony application. Unknown vendor fields, raw IR codes, account details and credentials are not exposed in the inspector. FunctionList is requested to report resource availability; function-map interpretation is not implemented. Unsupported fields are informational and cannot be saved through an arbitrary JSON editor.
 
 Cloud writes use an unofficial protocol and have automated fixture coverage. Validate the preview against your own hub before relying on it. There is no local resource-write endpoint and no cloud blocking.
 
 ## Setup Assistant and suggestions
 
-Describe each device’s HDMI destination and input, CEC state, intended main wake and sleep method, desired behavior when switching away, and behavior on All Off. **I’m not sure** is a valid answer. Device-specific hints explain where to look for settings. Answers survive child-bridge restarts.
+Describe each device’s HDMI cables, CEC state, wake and sleep methods, desired behavior when switching away, and behavior on All Off. **I’m not sure** is a valid answer. Device-specific hints explain where to look for settings. Answers survive child-bridge restarts, and older single-connection answers appear as the first cable row.
 
-The wake/sleep questions select the main method intended for activity startup or shutdown. They do not restrict other controllers. **HDMI-CEC** describes the method and may include commands from multiple connected devices. HomeKit/Homebridge buttons or automations can also control power. Record additional methods, senders, and triggers in the notes; these single-choice answers are not a complete inventory of every possible power-control path.
+Use the **Methods that can wake this device** and **Methods that can put it to sleep** checkboxes to select every available method. Capability is separate from preference: **Preferred wake method for activities** and **Preferred sleep method for All Off** describe the main method you want activities to use. These answers do not enable, disable or execute any controller. Older answers populate the corresponding checkboxes without changing the preferred method.
 
-For HDMI wiring, follow video from an output to an input: a source such as a console connects to a receiver input, then the receiver output connects to a TV input. Several sources can select the same receiver as their destination. ARC/eARC can return TV audio over that receiver-to-TV cable and is separate from CEC power control. Include both port labels, ARC/eARC details, and any additional outputs or switches in the notes; the current destination field describes one video-output connection per device.
+Under **Wake and sleep paths**, choose **Add wake or sleep path** for each method, sending device or external controller, and trigger. For example, record CEC sleep from the TV, CEC sleep from another device and a HomeKit/Homebridge Sleep button as three separate paths. Leave the preferred method unknown if several paths are equally important. Suggestions check recorded capabilities, preferred methods and active paths. A capability checkbox alone does not mean commands will run together; trigger text remains a note for manual review.
+
+Under **HDMI connections**, add one row per cable, with the output port on this device, destination device, destination input and ARC/eARC mode. A receiver can have several output rows, including an HDMI OUT 1 (eARC) cable to a TV and another output to a projector. Sources each connect to a receiver input. ARC/eARC returns TV audio over the same receiver-to-TV cable and is separate from CEC power control; do not add a reverse video connection for audio return. Remove a row to remove the local wiring record, then Save answers.
 
 Use the notes for individual CEC switches and HomeKit automations, including trigger, delay, conditions and action. Notes are preserved for manual review; the configurator does not execute automations or claim to understand free text automatically.
 
