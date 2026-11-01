@@ -462,11 +462,12 @@
       $('add-hue').onclick = () => edit('hue').catch(error => notice(errorText(error),true)); $('add-roku').onclick = () => edit('roku').catch(error => notice(errorText(error),true));
       $('refresh-status').onclick = refreshStatus;
       $('set-configurator-password').onclick = async () => {
-        const password = $('configurator-password').value;
+        const password = $('configurator-password').value, username=$('configurator-username').value.trim();
+        if(!/^[a-zA-Z0-9._@-]{1,64}$/.test(username)) { $('configurator-auth-status').textContent='Enter a username of 1–64 letters, numbers, dots, underscores, @ signs or hyphens.';return; }
         if(password.length<8 || password.length>256 || password!==$('configurator-password-confirm').value) { $('configurator-auth-status').textContent='Enter matching passwords of 8–256 characters.'; return; }
         $('configurator-password').value=''; $('configurator-password-confirm').value='';
         $('set-configurator-password').disabled=true;
-        try {await homebridge.request('/configurator/password',{password});$('configurator-auth-status').textContent='Password set. Open your configurator URL directly and sign in. Previous sessions were revoked.';}
+        try {await homebridge.request('/configurator/password',{password,username});$('configurator-auth-status').textContent='Username and password set. Open your configurator URL directly and sign in. Previous sessions were revoked.';}
         catch(error) {$('configurator-auth-status').textContent=errorText(error);}
         finally {$('set-configurator-password').disabled=false;}
       };

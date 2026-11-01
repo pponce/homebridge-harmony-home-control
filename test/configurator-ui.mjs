@@ -14,14 +14,16 @@ const server=new ConfiguratorServer({directory,config:{...normalizeConfig(),adve
   cloudFactory:()=>({target:null,async login(email,password,target){assert.equal(email,'fake@example.invalid');assert.equal(password,'fake-password');this.target=target;},async apply(change,submitted){submitted();pending=change;},async sync(progress){progress('Waiting for the test hub');if(pending)imported.resources.ActivityList.Activities[0].Name=pending.value;},close(){this.target=null;}})
 });
 await server.start();
-await server.setPassword('browser-test-password');
+await server.setPassword('browser-test-password','testuser');
 const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
 try {
   const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.goto(server.origin);
-  await page.getByLabel('Configurator password',{exact:true}).fill('incorrect');
+  await page.getByLabel('Configurator username',{exact:true}).fill('wronguser');
+  await page.getByLabel('Configurator password',{exact:true}).fill('browser-test-password');
   await page.getByRole('button',{name:'Sign in',exact:true}).click();
-  await page.getByText('Incorrect configurator password.',{exact:true}).waitFor();
+  await page.getByText('Incorrect configurator username or password.',{exact:true}).waitFor();
+  await page.getByLabel('Configurator username',{exact:true}).fill('TestUser');
   await page.getByLabel('Configurator password',{exact:true}).fill('browser-test-password');
   await page.getByLabel('Remember this browser for 30 days').check();
   await page.getByRole('button',{name:'Sign in',exact:true}).click();

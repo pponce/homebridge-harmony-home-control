@@ -68,3 +68,47 @@ test('direct login requires origin, remembers across server restart, enforces CS
   for(let i=0;i<10;i++) assert.equal((await post('auth/login',{password:'wrong'})).status,401);
   assert.equal((await post('auth/login',{password})).status,429);
 });
+test('username migration preserves old login until configured, then requires both credentials across restart',async t=>{
+  const {directory,auth}=await fixture(t);
+  await auth.setPassword(password);
+  const old=await auth.login(password,true);
+  assert.throws(()=>auth.setPassword(password,''),/username/);
+  assert.throws(()=>auth.setPassword(password,'bad name'),/username/);
+  await auth.setPassword(password,' TestUser ');
+  assert.equal(auth.restore(old.key),null);
+  const restarted=await new ConfiguratorAuth(directory).load();
+  for(const username of [undefined,'','other']) await assert.rejects(restarted.login(password,false,username),/Incorrect configurator username or password/);
+  await assert.rejects(restarted.login('wrong',false,'testuser'),/Incorrect configurator username or password/);
+  await restarted.login(password,false,'TESTUSER');
+  await restarted.setPassword('new-test-password');
+  await assert.rejects(restarted.login('new-test-password',false),/Incorrect/);
+  await restarted.login('new-test-password',false,'testuser');
+  await restarted.setPassword(password,'newuser');
+  await assert.rejects(restarted.login(password,false,'testuser'),/Incorrect/);
+  await restarted.login(password,false,'newuser');
+});
+test('username metadata omits identity, login enforces it, and icons are available before login',async t=>{
+  const {directory}=await fixture(t);
+  const server=new ConfiguratorServer({directory,config:{...normalizeConfig(),advertiseAddress:'127.0.0.1',harmonyHubAddresses:['192.0.2.70'],configuratorPort:0}});
+  await server.start();t.after(()=>server.close());
+  await server.setPassword(password,'testuser');
+  const origin='http://127.0.0.1:'+server.port;
+  const metadata=await (await fetch(origin+'/api/auth')).json();
+  assert.equal(metadata.usernameRequired,true);
+  assert.ok(!JSON.stringify(metadata).includes('testuser'));
+  for(const username of ['other','TESTUSER']){
+    const response=await fetch(origin+'/api/auth/login',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+    assert.equal(response.status,username==='other'?401:200);
+  }
+  const manifestResponse=await fetch(origin+'/manifest.webmanifest');
+  assert.equal(manifestResponse.headers.get('content-type'),'application/manifest+json');
+  const manifest=await manifestResponse.json();
+  assert.equal(manifest.start_url,'/');
+  for(const icon of manifest.icons){
+    const response=await fetch(origin+icon.src);
+    assert.equal(response.status,200);assert.equal(response.headers.get('content-type'),'image/png');
+    const bytes=Buffer.from(await response.arrayBuffer());
+    assert.equal(bytes.subarray(1,4).toString(),'PNG');
+    assert.equal(icon.sizes,bytes.readUInt32BE(16)+'x'+bytes.readUInt32BE(20));
+  }
+});

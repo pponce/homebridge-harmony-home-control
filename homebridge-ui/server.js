@@ -48,7 +48,7 @@ export class UiServer extends HomebridgePluginUiServer {
       try { return await this.runtime('/pair','POST'); } catch (error) { throw new Error(safeMessage(error)); }
     });
     this.onRequest('/configurator/open', () => this.runtime('/configurator/open','POST'));
-    this.onRequest('/configurator/password', payload => this.runtime('/configurator/password','POST',{password:payload?.password}));
+    this.onRequest('/configurator/password', payload => this.runtime('/configurator/password','POST',{password:payload?.password,username:payload?.username}));
     this.onRequest('/configurator/revoke', () => this.runtime('/configurator/revoke','POST'));
     process.on('SIGTERM', () => { this.access?.close(); process.exit(0); });
     this.ready();

@@ -80,10 +80,16 @@ Nginx handles the browser certificate; leave the plugin's certificate paths empt
 
 ## Direct website sign-in
 
-After enabling the configurator and restarting the child bridge, open **Direct website sign-in** in the Homebridge plugin settings. Enter and confirm a separate password of 8–256 characters and choose **Set password**. This takes effect immediately; no bridge restart is needed. Use your HTTPS configurator URL directly and sign in.
+After enabling the configurator and restarting the child bridge, open **Direct website sign-in** in the Homebridge plugin settings. Enter a username, enter and confirm a separate password of 8–256 characters, and choose **Set username and password**. Usernames are case-insensitive and use 1–64 letters, numbers, dots, underscores, @ signs or hyphens. This takes effect immediately; no bridge restart is needed. Use your HTTPS configurator URL directly and sign in.
 
 Select **Remember this browser for 30 days** to keep access across browser and child-bridge restarts. Without it, access lasts up to 12 hours and ends when the child bridge restarts; the cookie also expires with the browser session. Remembered sessions expire 30 days after sign-in, without extending on use. Logitech sign-in remains separate and is never remembered across bridge restarts.
 
 Use **Sign out** for this browser or **Sign out all browsers** to revoke every configurator session. Homebridge settings also provide session revocation and password replacement if you forget the password. Replacing the password revokes existing sessions and access links.
 
-Only a salted password hash and hashes of remembered session tokens are stored in the private `configurator-auth.json` file alongside plugin state. They are excluded from configuration exports and Homebridge settings. Password entry requires HTTPS or a localhost connection, including an SSH tunnel. Repeated sign-in attempts are limited to ten per minute across the configurator.
+The username, a salted password hash and hashes of remembered session tokens are stored in the private `configurator-auth.json` file alongside plugin state. They are excluded from configuration exports and Homebridge settings. Password entry requires HTTPS or a localhost connection, including an SSH tunnel. Repeated sign-in attempts are limited to ten per minute across the configurator.
+
+Existing password-only setups remain usable after updating. Save a username and password in Homebridge to require both on future sign-ins. This replaces the single configurator login and revokes existing sessions; it does not create multiple user accounts.
+
+## Phone home-screen shortcut
+
+The configurator includes a browser tab icon and phone home-screen icon. In Safari on iPhone, open the direct configurator URL, choose **Share → Add to Home Screen**, and name it Harmony. On Android, use your browser’s **Add to Home screen** option. The shortcut opens the configurator in a standalone window where supported; it still requires a connection to the Homebridge server. Choose Remember this browser when signing in from the shortcut to retain access.

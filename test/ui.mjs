@@ -41,7 +41,7 @@ let page;
 try {
   page = await browser.newPage({ viewport: { width: 1000,height: 900 } }); const errors = []; page.on('pageerror',error => { errors.push(error.message); console.error('Browser error:',error.message); });
   await page.exposeFunction('bridgeRequest',async (path,body) => {
-    if (path === '/configurator/password') { assert.equal(body.password,'testpass'); return {ok:true}; }
+    if (path === '/configurator/password') { assert.equal(body.password,'testpass'); assert.equal(body.username,'testuser'); return {ok:true}; }
     if (path === '/bootstrap') return { addresses: [{ name: 'eth0',address: '192.168.1.2' }],huePlatforms: [{ name: 'Hue',hosts: [] }],pickerCategories: PICKER_CATEGORIES };
     if (path === '/validate') return { hash: configHash(validateConfig(body)) };
     if (path === '/hue/discover') return { bridges: [realBridge] };
@@ -91,10 +91,11 @@ try {
   await page.locator('#address').selectOption('192.168.1.2'); await page.locator('#hubs').fill('192.168.1.3'); await page.locator('#hubs').dispatchEvent('change');
   await page.waitForFunction(() => !document.getElementById('save').disabled);
   await page.getByText('Direct website sign-in',{exact:true}).click();
+  await page.locator('#configurator-username').fill('testuser');
   await page.locator('#configurator-password').fill('testpass');
   await page.locator('#configurator-password-confirm').fill('testpass');
   await page.locator('#set-configurator-password').click();
-  await page.getByText('Password set. Open your configurator URL directly and sign in. Previous sessions were revoked.',{exact:true}).waitFor();
+  await page.getByText('Username and password set. Open your configurator URL directly and sign in. Previous sessions were revoked.',{exact:true}).waitFor();
   assert.equal(await page.locator('#configurator-password').inputValue(),'');
   await page.getByText('Direct website sign-in',{exact:true}).click();
   await page.locator('#configurator-public-url').fill('https://harmony.example.com');
