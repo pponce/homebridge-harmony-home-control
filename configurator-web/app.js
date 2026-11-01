@@ -14,7 +14,7 @@ import { helpText } from './help.js';
     b.setAttribute('aria-label',`Help for ${label}`); b.setAttribute('aria-haspopup','dialog');
     b.setAttribute('aria-controls','field-help'); b.title = `Explain ${label}`;
     b.onclick = () => {
-      $('field-help-title').textContent = label;
+      $('field-help-title').textContent = `About ${label}`;
       $('field-help-text').textContent = typeof explanation === 'function' ? explanation() : explanation;
       $('field-help').showModal();
     };
