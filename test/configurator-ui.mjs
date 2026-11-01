@@ -62,6 +62,7 @@ try {
   await page.getByRole('button',{name:'Sign out',exact:true}).click();
   await page.getByLabel('Configurator password',{exact:true}).waitFor();
   await page.reload();await page.getByLabel('Configurator password',{exact:true}).waitFor();
+  await page.goto('about:blank');
   await page.goto(server.accessLink().url);
   await page.waitForFunction(()=>!document.getElementById('read').disabled);
   assert.deepEqual(errors,[]);
