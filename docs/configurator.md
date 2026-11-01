@@ -27,7 +27,7 @@ Device control settings preserve both numeric and text values from the hub. Know
 | Configuration | Inspect | Apply changes |
 | --- | --- | --- |
 | Device names and available command names | Imported when supplied by the hub | Rename devices here; add or learn commands using Harmony |
-| IR command payloads | Load IR codes from Logitech for an infrared device | View and export supplied Raw payloads per device; no transmission or format conversion |
+| IR command data | Load IR codes from Logitech for an infrared device | View and export Harmony keycodes, raw data and command metadata |
 | Power actions, per-input commands and shared input sequences | Command and delay steps | Add, remove, reorder and adjust steps; review and save to Logitech |
 | Device power policy, power command type, repeats and power-on/input/inter-device/inter-key delays | Imported, with separately reported defaults when available | Draft here, review the current cloud value, save to Logitech, then compile and sync |
 | Infrared output assignment | Imported control port | Choose hub / mini blaster outputs when infrared transport is confirmed; review and save to Logitech |
@@ -60,7 +60,9 @@ Under **Button maps**, choose **Load cloud button maps** after saving a Logitech
 
 **Edit touchscreen labels & order** appears when the surface supplies identified touchscreen buttons with unique menu positions. Change labels or move existing buttons within their menu. Icons and assignments are preserved. After saving and syncing a button or screen change, check the remote and choose **I verified this on the remote** in the change record.
 
-For an infrared device, **Load IR codes** retrieves any command Raw payloads supplied by Logitech. The first supplied payload opens automatically. Use **Export this device’s IR codes** beside the result count to download the supplied payloads as JSON. The export preserves Logitech’s encoding; it does not convert to Pronto hex. Commands without a payload are listed separately. Bluetooth and network commands have no IR signal to export. Payloads are held for the current session and are excluded from the general review export.
+For an infrared device, **Load IR codes** retrieves its command data from Logitech. Each command can include a **Harmony keycode**, **Raw data**, a protocol ID, transport type and learned status. The first command with code data opens automatically. **Command details** lists every returned command and shows which representations were supplied or could not be read. Use **Export command data (JSON)** beside the result count to download all returned commands, including entries without code data.
+
+Harmony keycodes use Logitech’s encoding; rendering them as IR waveforms requires the matching protocol definition. Raw data is preserved in its supplied format. The viewer does not convert either representation to Pronto hex or transmit commands. Command data is held for the current session and excluded from the general review export.
 
 Both load controls show progress, empty results and errors beside the button. A Logitech rejection identifies the failed request and includes a numeric fault code when available. If a reload fails, any previously loaded data stays visible and is labeled accordingly.
 

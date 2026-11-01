@@ -146,16 +146,24 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
     const commands = panel(`${d.commands.length} available commands`,undefined,helpText['Available commands']), chips = e('div',undefined,'chips'); d.commands.forEach(c => chips.append(e('span',c,'chip'))); commands.append(details('Show command names',chips),e('p','Command names are inspected only; this page does not send them.','muted')); detail.append(commands);
     if(isInfrared(d)) {
       cloudReadButton(commands,'Load IR codes','ir-codes',{kind:'device',id:d.id});
-      commands.append(p('Logitech may supply a Raw payload for individual IR commands. Payloads are shown exactly as returned; their format may not be Pronto hex. Commands without a supplied payload cannot be exported as IR codes.'));
+      commands.append(p('View and export the command data supplied by Logitech. Harmony keycodes use Logitech’s encoding; rendering them as IR waveforms requires the matching protocol definition.'));
       if(data.cloud.codes?.deviceId===d.id) {
-        const codes=data.cloud.codes.commands, supplied=codes.filter(c=>c.raw);
-        commands.append(p(`${supplied.length} of ${codes.length} commands include a Raw payload.`));
-        if(supplied.length) commands.append(button('Export this device’s IR codes',()=>{
-          const url=URL.createObjectURL(new Blob([JSON.stringify({format:'harmony-raw-command-export',version:1,device:{id:d.id,name:d.name},commands:supplied},null,2)],{type:'application/json'})), a=e('a');a.href=url;a.download=`harmony-ir-${d.id}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+        const codes=data.cloud.codes.commands, supplied=codes.filter(c=>c.raw || c.keyCode);
+        commands.append(p(`${supplied.length} of ${codes.length} commands include code data.`));
+        if(codes.length) commands.append(button('Export command data (JSON)',()=>{
+          const url=URL.createObjectURL(new Blob([JSON.stringify({format:'harmony-command-code-export',version:1,device:{id:d.id,name:d.name},commands:codes},null,2)],{type:'application/json'})), a=e('a');a.href=url;a.download=`harmony-command-codes-${d.id}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
         }));
-        else commands.append(note(codes.length ? 'Logitech did not supply IR payloads for this device.' : 'Logitech returned no commands for this device.'));
-        for(const [index,code] of supplied.entries()) {const box=e('textarea');box.readOnly=true;box.value=code.raw;box.setAttribute('aria-label',`Harmony Raw payload for ${code.name}`);const row=details(code.name,box);row.querySelector('details').open=index===0;commands.append(row);}
-        if(codes.some(c=>!c.raw)) commands.append(details('Commands without a supplied IR payload',p(codes.filter(c=>!c.raw).map(c=>c.name).join(', '))));
+        if(!supplied.length) commands.append(note(codes.length ? 'The command list loaded, but no readable code data was returned.' : 'Logitech returned no commands for this device.'));
+        for(const [index,code] of supplied.entries()) {
+          const content=e('div');
+          for(const [key,label] of [['keyCode','Harmony keycode'],['raw','Raw data']]) if(code[key]) {const box=e('textarea');box.readOnly=true;box.value=code[key];field(content,label,box);box.setAttribute('aria-label',`${label} for ${code.name}`);}
+          content.append(table(['Protocol ID','Transport type','Learned'],[[code.protocolId,code.transport,code.learned]]));
+          const row=details(code.name,content);row.querySelector('details').open=index===0;commands.append(row);
+        }
+        if(codes.length) {
+          const availability=c=>[c.keyCode ? 'Harmony keycode' : c.keyCodeState==='unsupported' ? 'Unsupported KeyCode format' : '',c.raw ? 'Raw data' : c.rawState==='unsupported' ? 'Unsupported Raw format' : ''].filter(Boolean).join(' · ') || 'Not supplied';
+          const overview=details('Command details',table(['Command','Code data','Protocol ID','Transport type','Learned'],codes.map(c=>[c.name,availability(c),c.protocolId,c.transport,c.learned])));overview.querySelector('details').open=!supplied.length;commands.append(overview);
+        }
       }
     }
     appendMaps(detail,s.maps.filter(m => m.deviceId === d.id),{kind:'device',id:d.id});

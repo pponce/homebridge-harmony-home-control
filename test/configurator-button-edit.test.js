@@ -94,12 +94,24 @@ test('button saves require unchanged review and verify readback even when Logite
   await assert.rejects(cloud.apply(change,()=>{},review),/changed after review/);assert.equal(writes,0);
   review=await cloud.preview(change);await cloud.apply(change,()=>{},review);assert.equal(writes,1);cloud.close();
 });
-test('IR reads return only supplied command payloads and reject non-infrared profiles',async()=>{
-  const xml=envelope('GetCommands',`<KeyValueOfDeviceIdArrayOfCommand><Key><Value>101</Value></Key><Value><Command><Name>PowerOn</Name><Raw>0000 006D 0002</Raw><ProtocolId>9</ProtocolId><Secret>never return</Secret></Command><Command><Name>PowerOff</Name><Raw xmlns:i="${I}" i:nil="true"/></Command></Value></KeyValueOfDeviceIdArrayOfCommand>`);
-  assert.equal(commandDetails(xml,'101')[0].raw,'0000 006D 0002');
-  assert.equal(commandDetails(xml.replace('0000 006D 0002','\n0000 006D 0002\n'),'101')[0].raw,'\n0000 006D 0002\n');
-  const cloud=new HarmonyCloud();let transport='1';cloud.readDevice=async()=>({raw:`<Device><Transport>${transport}</Transport></Device>`});cloud.soap=async()=>xml;
-  const result=await cloud.infraredCodes('101');assert.equal(result[0].raw,'0000 006D 0002');assert.equal(result[1].raw,null);assert.ok(!JSON.stringify(result).includes('never return'));
-  cloud.soap=async()=>xml.replace('<ProtocolId>9</ProtocolId>','<TransportType>32</TransportType><ProtocolId>9</ProtocolId>');assert.equal((await cloud.infraredCodes('101'))[0].raw,null);
-  transport='2';await assert.rejects(cloud.infraredCodes('101'),/infrared/);cloud.close();
+const irResponse=commands=>envelope('GetCommands',`<KeyValueOfDeviceIdArrayOfCommand><Key><Value>101</Value></Key><Value>${commands}</Value></KeyValueOfDeviceIdArrayOfCommand>`);
+test('command codes preserve keycodes, raw data and supplied metadata',()=>{
+  const xml=irResponse(`<Command><Name>PowerOn</Name><KeyCode>\nG:Sony 12 Bit:()(0x8D1)():3\n</KeyCode><Raw xmlns:i="${I}" i:nil="true"/><IsLearned>false</IsLearned><ProtocolId>9</ProtocolId><TransportType>32</TransportType></Command><Command><Name>Learned</Name><Raw>\n0000 006D 0002\n</Raw><KeyCode>encoded &amp; &lt;command&gt;</KeyCode><IsLearned>true</IsLearned></Command>`);
+  const result=commandDetails(xml,'101');
+  assert.equal(result[0].keyCode,'\nG:Sony 12 Bit:()(0x8D1)():3\n');assert.equal(result[0].keyCodeState,'supplied');assert.equal(result[0].rawState,'not-supplied');assert.equal(result[0].learned,false);
+  assert.equal(result[0].protocolId,'9');assert.equal(result[0].transport,'32');
+  assert.equal(result[1].raw,'\n0000 006D 0002\n');assert.equal(result[1].rawState,'supplied');assert.equal(result[1].keyCode,'encoded & <command>');assert.equal(result[1].learned,true);
+});
+test('command codes distinguish absent, nil and blank values from unsupported structures',()=>{
+  const result=commandDetails(irResponse(`<Command><Name>Absent</Name><IsLearned>unknown</IsLearned></Command><Command xmlns:i="${I}"><Name>Nil</Name><Raw i:nil="true">ignored</Raw><KeyCode i:nil="1">ignored</KeyCode></Command><Command><Name>Empty</Name><Raw> \n </Raw><KeyCode/></Command><Command><Name>Structured</Name><Raw><Bytes>not a scalar</Bytes></Raw><KeyCode><Encoding>not a scalar</Encoding></KeyCode></Command>`),'101');
+  for(const code of result.slice(0,3)) {assert.equal(code.rawState,'not-supplied');assert.equal(code.keyCodeState,'not-supplied');assert.equal(code.learned,null);}
+  assert.equal(result[1].raw,'');assert.equal(result[1].keyCode,'');
+  assert.equal(result[3].rawState,'unsupported');assert.equal(result[3].keyCodeState,'unsupported');assert.equal(result[3].raw,'');assert.equal(result[3].keyCode,'');
+});
+test('IR reads retain command code data regardless of transport metadata and reject non-infrared profiles',async()=>{
+  const xml=irResponse(`<Command><Name>PowerOn</Name><KeyCode>G:Sony 12 Bit:()(0x8D1)():3</KeyCode><ProtocolId>9</ProtocolId><TransportType>32</TransportType><IsLearned>false</IsLearned><Secret>never return</Secret></Command><Command><Name>PowerOff</Name><Raw>\n0000 006D 0002\n</Raw><TransportType>unknown</TransportType></Command><Command><Name>No codes</Name></Command><Command><Name>Structured</Name><KeyCode><Private>never return</Private></KeyCode></Command>`);
+  const cloud=new HarmonyCloud();let transport='1',reads=0;cloud.readDevice=async()=>({raw:`<Device><Transport>${transport}</Transport></Device>`});cloud.soap=async(service,operation)=>{assert.equal(service,'DeviceManager');assert.equal(operation,'GetCommands');reads++;return xml;};
+  const result=await cloud.infraredCodes('101');assert.equal(result[0].raw,null);assert.equal(result[0].keyCode,'G:Sony 12 Bit:()(0x8D1)():3');assert.equal(result[0].learned,false);assert.equal(result[0].transport,'32');assert.equal(result[1].raw,'\n0000 006D 0002\n');assert.equal(result[1].transport,'unknown');
+  assert.equal(result[2].raw,null);assert.equal(result[2].keyCode,null);assert.equal(result[2].learned,null);assert.equal(result[3].keyCode,null);assert.equal(result[3].keyCodeState,'unsupported');assert.ok(!JSON.stringify(result).includes('never return'));
+  transport='2';await assert.rejects(cloud.infraredCodes('101'),/infrared/);assert.equal(reads,1);cloud.close();
 });

@@ -13,6 +13,18 @@ let mapLoadMode='success',irLoadMode='success',releaseRead,readStarted;
 imported.resources.MapList.ButtonMaps.push({'Id-':502,'DeviceId-':101,Buttons:[{TextOnRemote:'Receiver power',ButtonId:'soft-1',ButtonAction:{__type:'ButtonCommandAction',CommandName:'PowerOn',DeviceId:{Value:101}}},{ButtonId:'help',ButtonAction:{__type:'ButtonClientAction',ActionName:'Help'}}],Sequences:[]});
 const cloudButton={key:'Power',id:'button-1',type:'HardRemoteButton',label:'',group:'Power',press:{kind:'command',deviceId:'101',command:'PowerOn'},long:null,double:null};
 const addedButtons=[];
+const irKeyCode='G:Sony 12 Bit:()(0x8D1)():3';
+const irCodes=[
+  {name:'PowerOn',raw:null,rawState:'not-supplied',keyCode:irKeyCode,keyCodeState:'supplied',protocolId:'9',transport:'32',learned:false},
+  {name:'PowerOff',raw:'\n0000 006D 0002\n',rawState:'supplied',keyCode:null,keyCodeState:'not-supplied',protocolId:'9',transport:'1',learned:true},
+  {name:'Menu',raw:null,rawState:'not-supplied',keyCode:null,keyCodeState:'not-supplied',protocolId:'9',transport:'1',learned:null}
+];
+async function mockInfraredCodes() {
+  if(irLoadMode==='delay')await new Promise(resolve=>{releaseRead=resolve;readStarted();});
+  if(irLoadMode==='empty')return [];
+  if(irLoadMode==='no-code')return irCodes.map((c,index)=>({...c,raw:null,keyCode:null,rawState:'not-supplied',keyCodeState:index===1?'unsupported':'not-supplied'}));
+  return structuredClone(irCodes);
+}
 let cloudLayout=[{button:{key:'',id:'soft-1',type:'SoftRemoteButton'},label:'TV',menu:'Commands',position:1},{button:{key:'',id:'soft-2',type:'SoftRemoteButton'},label:'Movies',menu:'Commands',position:2}];
 const server=new ConfiguratorServer({directory,config:{...normalizeConfig(),advertiseAddress:'127.0.0.1',harmonyHubAddresses:[imported.host],configuratorPort:0},
   reader:{read:async()=>{if(offline)throw new ConfiguratorError('The test hub is offline.',502);return structuredClone(imported);},close(){}},
@@ -29,7 +41,7 @@ const server=new ConfiguratorServer({directory,config:{...normalizeConfig(),adve
     else if(pending.field==='delays.powerOn') imported.resources.DeviceList.DevicesWithFeatures[0].DeviceFeatures[0].PowerOnDelay=pending.value;
     else if(pending.field==='inputCommands') imported.resources.DeviceList.DevicesWithFeatures[0].DeviceFeatures[1].Inputs.find(i=>i.InputName===pending.inputName).Actions=pending.value.map((a,i)=>a.kind==='command'?{__type:'IRPressAction',IRCommandName:a.command,Duration:a.duration,Order:i+1}:{__type:'IRDelayAction',Delay:a.delay,Order:i+1});
     pending=null;
-  },async activityRoles(id){const activity=imported.resources.ActivityList.Activities.find(a=>String(a['Id-'])===id);return {activityId:id,type:activity.Type,roles:activity.Roles.map(r=>({type:r.__type,deviceId:String(r['DeviceId-']),input:r.SelectedInput?.Name || ''})).sort((a,b)=>a.type.localeCompare(b.type)||a.deviceId.localeCompare(b.deviceId)),options:[{type:'DisplayActivityRole',deviceIds:['101']},{type:'VolumeActivityRole',deviceIds:['101']},{type:'PassThroughActivityRole',deviceIds:['101','102']}]};},async buttonMaps(owner){if(mapLoadMode==='error')throw new ConfiguratorError('Logitech rejected GetButtonMaps. The requested data could not be loaded.',502);if(mapLoadMode==='empty')return [];return [{ownerKind:owner.kind,ownerId:owner.id,target:{remoteId:'800',skinId:'104',surfaceId:'7',mapId:'501',identifier:''},buttons:[structuredClone(cloudButton),...structuredClone(addedButtons),...cloudLayout.map(r=>({...r.button,label:r.label,group:'',press:{kind:'command',deviceId:'101',command:'PowerOn'},long:null,double:null}))],layout:structuredClone(cloudLayout)}];},async buttonCatalog(owner){return {ownerKind:owner.kind,ownerId:owner.id,remoteId:'800',skinId:'104',buttons:[{...cloudButton,press:{kind:'system',name:'Help'}},{key:'Menu',id:'0',type:'HardRemoteButton',label:'',group:'Navigation',press:null,long:null,double:null}]};},async infraredCodes(){if(irLoadMode==='delay')await new Promise(resolve=>{releaseRead=resolve;readStarted();});if(irLoadMode==='empty')return [];return [{name:'PowerOn',raw:'0000 006D 0002',protocolId:'9',transport:'1'},{name:'PowerOff',raw:null,protocolId:'9',transport:'1'}];},close(){this.target=null;}})
+  },async activityRoles(id){const activity=imported.resources.ActivityList.Activities.find(a=>String(a['Id-'])===id);return {activityId:id,type:activity.Type,roles:activity.Roles.map(r=>({type:r.__type,deviceId:String(r['DeviceId-']),input:r.SelectedInput?.Name || ''})).sort((a,b)=>a.type.localeCompare(b.type)||a.deviceId.localeCompare(b.deviceId)),options:[{type:'DisplayActivityRole',deviceIds:['101']},{type:'VolumeActivityRole',deviceIds:['101']},{type:'PassThroughActivityRole',deviceIds:['101','102']}]};},async buttonMaps(owner){if(mapLoadMode==='error')throw new ConfiguratorError('Logitech rejected GetButtonMaps. The requested data could not be loaded.',502);if(mapLoadMode==='empty')return [];return [{ownerKind:owner.kind,ownerId:owner.id,target:{remoteId:'800',skinId:'104',surfaceId:'7',mapId:'501',identifier:''},buttons:[structuredClone(cloudButton),...structuredClone(addedButtons),...cloudLayout.map(r=>({...r.button,label:r.label,group:'',press:{kind:'command',deviceId:'101',command:'PowerOn'},long:null,double:null}))],layout:structuredClone(cloudLayout)}];},async buttonCatalog(owner){return {ownerKind:owner.kind,ownerId:owner.id,remoteId:'800',skinId:'104',buttons:[{...cloudButton,press:{kind:'system',name:'Help'}},{key:'Menu',id:'0',type:'HardRemoteButton',label:'',group:'Navigation',press:null,long:null,double:null}]};},infraredCodes:mockInfraredCodes,close(){this.target=null;}})
 });
 await server.start();
 await server.setPassword('browser-test-password','testuser');
@@ -237,14 +249,22 @@ try {
   await page.waitForFunction(()=>!document.getElementById('read').disabled);
   await page.getByRole('button',{name:/^Devices/}).click();irLoadMode='empty';await page.getByRole('button',{name:'Load IR codes',exact:true}).click();
   await page.getByText('Logitech returned no commands for this device.',{exact:true}).waitFor();
-  assert.equal(await page.getByRole('button',{name:'Export this device’s IR codes',exact:true}).count(),0);
+  assert.equal(await page.getByRole('button',{name:'Export command data (JSON)',exact:true}).count(),0);
+  irLoadMode='no-code';await page.getByRole('button',{name:'Load IR codes',exact:true}).click();
+  await page.getByText('The command list loaded, but no readable code data was returned.',{exact:true}).waitFor();
+  await page.getByRole('cell',{name:'Unsupported KeyCode format',exact:true}).waitFor();
+  assert.equal(await page.locator('summary').filter({hasText:/^Command details$/}).evaluate(n=>n.parentElement.open),true);
+  const metadataDownloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Export command data (JSON)',exact:true}).click();
+  const metadata=JSON.parse(await readFile(await (await metadataDownloadPromise).path(),'utf8'));assert.equal(metadata.commands.length,3);assert.equal(metadata.commands[0].raw,null);assert.equal(metadata.commands[0].keyCode,null);assert.equal(metadata.commands[1].keyCodeState,'unsupported');
   irLoadMode='delay';const started=new Promise(resolve=>{readStarted=resolve;});await page.getByRole('button',{name:'Load IR codes',exact:true}).click();await page.getByText('Loading from Logitech…',{exact:true}).waitFor();await started;
   assert.equal(await page.getByRole('button',{name:'Loading…',exact:true}).isDisabled(),true);releaseRead();irLoadMode='success';
-  await page.getByText('1 of 2 commands include a Raw payload.',{exact:true}).waitFor();
-  assert.equal(await page.getByLabel('Harmony Raw payload for PowerOn',{exact:true}).isVisible(),true);
-  const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Export this device’s IR codes',exact:true}).click();const download=await downloadPromise;
-  assert.equal(download.suggestedFilename(),'harmony-ir-101.json');const exported=JSON.parse(await readFile(await download.path(),'utf8'));assert.equal(exported.commands[0].raw,'0000 006D 0002');assert.equal(exported.commands.length,1);
+  await page.getByText('2 of 3 commands include code data.',{exact:true}).waitFor();
+  assert.equal(await page.getByLabel('Harmony keycode for PowerOn',{exact:true}).isVisible(),true);assert.equal(await page.getByLabel('Harmony keycode for PowerOn',{exact:true}).inputValue(),irKeyCode);
+  await page.locator('summary').filter({hasText:/^PowerOff$/}).click();assert.equal(await page.getByLabel('Raw data for PowerOff',{exact:true}).inputValue(),'\n0000 006D 0002\n');
+  const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Export command data (JSON)',exact:true}).click();const download=await downloadPromise;
+  assert.equal(download.suggestedFilename(),'harmony-command-codes-101.json');const exported=JSON.parse(await readFile(await download.path(),'utf8'));assert.equal(exported.format,'harmony-command-code-export');assert.deepEqual(exported.device,{id:'101',name:'Living room display'});assert.deepEqual(exported.commands,irCodes);
   await page.screenshot({path:join(artifacts,'ui-configurator-ir-codes.png'),fullPage:true});
+  await page.setViewportSize({width:390,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));await page.screenshot({path:join(artifacts,'ui-configurator-ir-codes-mobile.png'),fullPage:true});await page.setViewportSize({width:1440,height:1000});
   await page.route('**/api/ir-codes',route=>route.fulfill({status:502,contentType:'text/html',body:'<html>Upstream failed: private-proxy-details</html>'}));
   await page.getByRole('button',{name:'Load IR codes',exact:true}).click();
   await page.locator('.cloud-read-status').filter({hasText:'unreadable response (HTTP 502)'}).waitFor();
@@ -285,5 +305,5 @@ try {
   await page.goto(server.accessLink().url);
   await page.waitForFunction(()=>!document.getElementById('read').disabled);
   assert.deepEqual(errors,[]);
-  console.log('Configurator browser workflow passed: control settings and help; keyboard/focus and dialogs; missing-value drafts; input reorder; HDMI/ARC and power paths; cloud review/save/sync; activity actions, selected inputs and role selection; catalog-based added buttons and system actions; touchscreen labels/order; remote verification; inline cloud loading/error/empty/retry states; visible IR payloads and JSON download; stale read; HTML escaping; mobile and dark mode.');
+  console.log('Configurator browser workflow passed: control settings and help; keyboard/focus and dialogs; missing-value drafts; input reorder; HDMI/ARC and power paths; cloud review/save/sync; activity actions, selected inputs and role selection; catalog-based added buttons and system actions; touchscreen labels/order; remote verification; inline cloud loading/error/empty/retry states; keycode/raw display, missing code details and JSON downloads; stale read; HTML escaping; mobile and dark mode.');
 } finally {await browser.close();await server.close();await rm(directory,{recursive:true,force:true});}
