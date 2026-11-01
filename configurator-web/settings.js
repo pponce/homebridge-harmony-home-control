@@ -28,6 +28,7 @@ export const activityFields = {
   order: { label:'Activity display order', type:'number', min:0, max:1000, help:'Display order', guide:'activity' },
   enter: {label:'Start actions',type:'activity-actions',help:'Start actions',guide:'activity'},
   leave: {label:'End actions',type:'activity-actions',help:'End actions',guide:'activity'},
+  roles: {label:'Participating devices and roles',type:'activity-roles',help:'Participating devices and roles',guide:'role'},
 };
 export const roleFields = {
   input: {label:'Selected input',type:'activity-input',help:'Selected input',guide:'role'},
@@ -42,7 +43,9 @@ export function settingSpec(change) {
 }
 export const isInfrared = device => /^(1|ir|infrared(?: \(ir\))?)$/i.test(String(device.transport ?? '').trim());
 export const orderedInputs = device => [...(device?.inputs || [])].sort((a,b) => (a.order ?? Infinity) - (b.order ?? Infinity));
+export const canonicalRoles = roles => roles.map(r=>({type:String(r.type).split(':')[0],deviceId:r.deviceId,input:r.input || ''})).sort((a,b)=>a.type.localeCompare(b.type)||a.deviceId.localeCompare(b.deviceId));
 export function draftValue(item,field,inputName) {
+  if(field==='roles') return item ? canonicalRoles(item.roles || []) : null;
   if(activityFields[field]?.type==='activity-actions') {
     if(!item || item.actionsKnown?.[field]===false) return null;
     return [...(item[field] || [])].sort((a,b)=>(a.order ?? 0)-(b.order ?? 0)).map(a=> {
@@ -87,6 +90,7 @@ export function inputMethodLabel(value) {
   return label ? `${label} (code ${value})` : /^\d+$/.test(String(value)) ? `Reported method code ${value}` : value;
 }
 export function formatDraftValue(change,value) {
+  if(change.kind==='activity' && change.field==='roles') return (value || []).map(r=>`${r.type.replace(/ActivityRole$/,'')} · device ${r.deviceId}${r.input ? ` · ${r.input}` : ''}`).join('\n') || 'No participating devices';
   if(change.kind==='button') return change.field==='layout' ? (value || []).map(v=>`${v.menu} · ${v.position}: ${v.label}`).join('\n') : value===null ? 'Unassigned' : value.kind==='command' ? `${value.command} · device ${value.deviceId}` : value.kind==='channel' ? `Channel ${value.channel} · device ${value.deviceId}` : value.kind==='system' ? `System action: ${value.name}` : `Unsupported action: ${value.type}`;
   if (value == null || value === '') return 'Not supplied';
   if (Array.isArray(value)) return value.length ? value.map((v,i) => `${i+1}. ${typeof v === 'string' ? v : v.kind === 'command' ? `${v.command}${v.deviceId ? ` · device ${v.deviceId}` : ''}${v.duration == null ? '' : ` (hold ${v.duration} ms)`}` : v.kind === 'delay' ? `Wait ${v.delay} ms` : `Unsupported action: ${v.type}`}`).join('\n') : 'No actions';

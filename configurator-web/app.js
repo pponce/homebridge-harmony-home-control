@@ -171,15 +171,37 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
     const roles = panel('Power order & inputs','Configured order is not a measured execution trace. Harmony can skip devices already on; CEC and automations can act independently.');
     const orderCell = (r,key,label) => { const cell = e('div'); cell.append(e('div',display(r[key]),'value'),editButton('activity',a,key,`${deviceName(r.deviceId)} ${label}`,r.index)); return cell; };
     roles.append(table(['Device / role','Selected input','On order','Off order','Next delay (ms)'],[...a.roles].sort((x,y)=>(x.powerOnOrder ?? 9999)-(y.powerOnOrder ?? 9999)).map(r => { const who = e('div'); who.append(e('strong',deviceName(r.deviceId)),e('div',r.type.split(':')[0],'muted')); return [who,s.devices.find(d=>d.id===r.deviceId)?.inputs.length ? orderCell(r,'input','selected input') : r.input || 'No inputs available',orderCell(r,'powerOnOrder','power-on order'),orderCell(r,'powerOffOrder','power-off order'),orderCell(r,'nextDeviceDelay','next-device delay')]; })));
-    roles.append(note('Edit selected inputs, power order and delays here. To add or remove participating devices or change their roles, use Harmony activity setup.')); detail.append(roles);
+    cloudReadButton(roles,'Load role choices','activity-roles',{kind:'activity',id:a.id});
+    if(data.cloud.activityRoles?.activityId===a.id) roles.append(button('Edit participating devices & roles',()=>editActivityRoles(a,data.cloud.activityRoles)));
+    roles.append(note('Load Logitech’s role choices to change participating devices and their roles. Review button maps after changing roles. Update actions and button assignments before removing a device they use.')); detail.append(roles);
     for (const [label,key] of [['Start actions','enter'],['End actions','leave']]) { const card = panel(label); card.append(actionsTable(a[key]),editButton('activity',a,key)); detail.append(card); }
     appendMaps(detail,s.maps.filter(m => m.activityId === a.id),{kind:'activity',id:a.id});
+  }
+  function editActivityRoles(activity,catalog) {
+    const block=e('div'),roleRows=[],extras=new Set(catalog.roles.filter(r=>r.type==='PassThroughActivityRole').map(r=>r.deviceId)),selectedInputs=Object.fromEntries(catalog.roles.map(r=>[r.deviceId,r.input])),inputs=e('div');
+    if(catalog.roles.some(r=>!catalog.options.some(o=>o.type===r.type && o.deviceIds.includes(r.deviceId)))) throw new Error('This activity contains a role that Logitech did not offer for editing. Use Harmony activity setup.');
+    block.append(p(`Activity type: ${catalog.type}`));
+    const drawInputs=()=>{
+      inputs.replaceChildren();const ids=new Set([...roleRows.map(r=>r.control.value),...extras].filter(Boolean));
+      for(const id of ids) {const device=data.snapshot.devices.find(d=>d.id===id);if(!device?.inputs.length) {selectedInputs[id]='';continue;}const choice=select([['','No input selection'],...device.inputs.map(i=>[i.name,i.name])],selectedInputs[id] || '');choice.onchange=()=>{selectedInputs[id]=choice.value;};field(inputs,`Input for ${device.name}`,choice);}
+    };
+    for(const option of catalog.options.filter(o=>o.type!=='PassThroughActivityRole' && o.deviceIds.length)) {
+      const current=catalog.roles.find(r=>r.type===option.type),control=select([['','Choose a device'],...data.snapshot.devices.filter(d=>option.deviceIds.includes(d.id)).map(d=>[d.id,d.name])],current?.deviceId || '');control.required=true;control.onchange=drawInputs;
+      field(block,option.type.replace(/ActivityRole$/,'').replace(/([a-z])([A-Z])/g,'$1 $2')+' device',control);roleRows.push({type:option.type,control});
+    }
+    const pass=catalog.options.find(o=>o.type==='PassThroughActivityRole');
+    for(const device of data.snapshot.devices.filter(d=>pass?.deviceIds.includes(d.id))) {const check=e('input');check.type='checkbox';check.checked=extras.has(device.id);check.onchange=()=>{if(check.checked)extras.add(device.id);else extras.delete(device.id);drawInputs();};field(block,`Additional device: ${device.name}`,check);}
+    block.append(inputs);drawInputs();const revision=data.revision,version=data.snapshot.version;
+    showEditor('Participating devices & roles',[block],'Save draft',async()=>{
+      const roles=[...roleRows.map(r=>({type:r.type,deviceId:r.control.value})),...Array.from(extras,deviceId=>({type:'PassThroughActivityRole',deviceId}))].map(r=>({...r,input:selectedInputs[r.deviceId] || ''}));
+      await mutate('draft',{revision,change:{kind:'activity',id:activity.id,field:'roles',value:roles,version}});view='changes';render();
+    });
   }
   function cloudReadButton(parent,label,path,owner) {
     const ready=data.cloud.saved || data.cloud.connected && data.cloud.host===data.host;
     const key=JSON.stringify([data.host,path,owner.kind,owner.id]), state=cloudReads.get(key), status=e('p',undefined,'cloud-read-status');
     status.dataset.cloudRead=key;status.tabIndex=-1;status.setAttribute('role',state?.error ? 'alert' : 'status');
-    const loaded=path==='ir-codes' ? data.cloud.codes?.deviceId===owner.id : path==='button-catalog' ? data.cloud.buttonCatalog?.ownerKind===owner.kind && data.cloud.buttonCatalog.ownerId===owner.id : data.cloud.mapOwner?.kind===owner.kind && data.cloud.mapOwner.id===owner.id;
+    const loaded=path==='ir-codes' ? data.cloud.codes?.deviceId===owner.id : path==='activity-roles' ? data.cloud.activityRoles?.activityId===owner.id : path==='button-catalog' ? data.cloud.buttonCatalog?.ownerKind===owner.kind && data.cloud.buttonCatalog.ownerId===owner.id : data.cloud.mapOwner?.kind===owner.kind && data.cloud.mapOwner.id===owner.id;
     status.textContent=state?.error ? `${state.error}${loaded ? ' Showing the previously loaded data.' : ''}` : state?.loading ? 'Loading from Logitech…' : loaded ? 'Loaded from Logitech.' : !data.cloud.loginAvailable ? 'Open this page over HTTPS or through localhost to load Logitech data.' : !ready ? 'Save your Logitech login in Review changes to load this data.' : data.busy || localBusy ? 'Wait for the current operation to finish.' : '';
     status.hidden=!status.textContent;if(state?.error) status.classList.add('error');
     const b=e('button',state?.loading ? 'Loading…' : label);b.type='button';
@@ -373,7 +395,7 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
   const statusLabels = { draft:'Draft only',saving:'Saving',unconfirmed:'Cloud save unconfirmed',conflict:'Needs a fresh draft','cloud-saved':'Saved to Logitech · sync needed','hub-confirmed':'Confirmed on hub','remote-check':'Synced · check the remote','remote-confirmed':'Confirmed on remote','changed-again':'Hub value changed again','manual-pending':'Waiting for app change + sync' };
   function renderChanges(content) {
     content.append(heading('Review changes','Draft locally, choose where to apply, then read the hub to verify the result. Discarding a draft does not undo an applied setting.'));
-    const cloud = panel('Logitech cloud', 'Save device settings, input and power command sequences, activity names, display order and role power order. Each change is reviewed before saving; compile and sync updates the hub.');
+    const cloud = panel('Logitech cloud', 'Review and save device settings, activity roles and actions, button assignments and supported touchscreen changes. Compile and sync updates the hub.');
     const connected = data.cloud.connected && data.cloud.host === data.host;
     if(data.cloud.saved) cloud.append(note('Logitech login saved on this server. It is used automatically for cloud changes and sync, including after Homebridge restarts. The saved password is never displayed.'));
     if(data.cloud.savedNeedsUpdate) cloud.append(note('The saved login was verified for a different hub/account identity at this address. Read the hub and save the login again, or forget it.',true),button('Forget saved login',async()=>{await mutate('forget-login');render();}));
