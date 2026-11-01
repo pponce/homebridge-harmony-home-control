@@ -14,6 +14,33 @@ import { normalizeConfig,validateConfig } from '../lib/config.js';
 import { listen,closeServer } from '../lib/http.js';
 import { nativeFixture,modelFixture } from './configurator-fixtures.js';
 
+test('device projection preserves native numeric control settings and labels only known mappings',() => {
+  const snapshot=nativeFixture(), device=snapshot.resources.DeviceList.DevicesWithFeatures[0].Device;
+  const projected=()=>project(snapshot).devices[0];
+  assert.equal(projected().transport,'1');assert.equal(projected().transportLabel,'Infrared (IR) (code 1)');
+  assert.equal(projected().controlPort,'7');assert.equal(projected().controlPortLabel,'Hub + Mini blaster 1 + Mini blaster 2 (code 7)');
+  for (const [port,label] of [[1,'Hub'],[2,'Mini blaster 1'],[3,'Hub + Mini blaster 1'],[4,'Mini blaster 2'],[5,'Hub + Mini blaster 2'],[6,'Mini blaster 1 + Mini blaster 2']]) {
+    device.ControlPort=port;assert.equal(projected().controlPortLabel,`${label} (code ${port})`);
+  }
+  device.Transport='32';device.ControlPort='7';
+  assert.equal(projected().transportLabel,'Bluetooth (code 32)');assert.equal(projected().controlPortLabel,'Not used for Bluetooth (stored: 7)');
+  device.Transport='IR';device.ControlPort='2';assert.equal(projected().controlPortLabel,'Mini blaster 1 (code 2)');
+  device.Transport=64;device.ControlPort=99;
+  assert.equal(projected().transport,'64');assert.match(projected().transportLabel,/Unrecognized.*64/);
+  assert.equal(projected().controlPort,'99');assert.equal(projected().controlPortLabel,'Reported port code 99');
+  device.Transport=0;device.ControlPort=0;device.PressMinRepeats=0;
+  assert.equal(projected().transport,'0');assert.equal(projected().controlPort,'0');assert.equal(projected().repeats,0);
+  device.Transport='Network';device.ControlPort='Custom output';
+  assert.equal(projected().transportLabel,'Network');assert.equal(projected().controlPortLabel,'Custom output');
+  for (const absent of [undefined,null,'','  ',false,{},[],NaN,Infinity]) {
+    device.Transport=absent;device.ControlPort=absent;
+    assert.equal(projected().transport,'');assert.equal(projected().transportLabel,'');
+    assert.equal(projected().controlPort,'');assert.equal(projected().controlPortLabel,'');
+  }
+  snapshot.resources.DeviceList.DevicesWithFeatures[0].DeviceFeatures[1].InputType=0;
+  assert.equal(projected().inputMethod,'0');
+});
+
 test('root-free reads use account resources, accept numeric IDs/string resources and never send commands',async () => {
   const calls = [], fixture = nativeFixture(); let socket,closed=false;
   class Socket extends EventTarget {

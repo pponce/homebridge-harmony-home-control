@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>Harmony configurator</title><link rel="icon" type="image/png" sizes="128x128" href="/icon-small.png"><link rel="apple-touch-icon" sizes="1024x1024" href="/apple-touch-icon.png"><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#087f75"><meta name="apple-mobile-web-app-title" content="Harmony"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>Harmony configurator</title><link rel="icon" type="image/png" sizes="128x128" href="/icon-small.png"><link rel="apple-touch-icon" sizes="1024x1024" href="/apple-touch-icon.png"><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#087f75"><meta name="apple-mobile-web-app-title" content="Harmony"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="stylesheet" href="/style.css"><script src="/app.js" type="module"></script></head>
 <body>
   <div class="shell">
     <aside class="sidebar">
@@ -16,7 +16,7 @@
       <div class="sidebar-note"><span class="status-dot" aria-hidden="true"></span> Inside your child bridge<p>Your answers and drafts stay on your Homebridge machine.</p></div>
     </aside>
     <main>
-      <header class="toolbar"><label>Harmony hub<select id="hub" aria-label="Harmony hub" disabled></select></label><div class="toolbar-actions"><button id="sign-out" class="quiet" hidden>Sign out</button><button id="revoke-sessions" class="quiet" hidden>Sign out all browsers</button><button id="export" class="quiet" disabled>Export review</button><button id="read" class="primary" disabled>Read hub</button></div></header>
+      <header class="toolbar"><div class="hub-field"><div id="hub-label" class="field-label"><label for="hub">Harmony hub</label></div><select id="hub" aria-label="Harmony hub" disabled></select></div><div class="toolbar-actions"><button id="sign-out" class="quiet" hidden>Sign out</button><button id="revoke-sessions" class="quiet" hidden>Sign out all browsers</button><button id="export" class="quiet" disabled>Export review</button><button id="read" class="primary" disabled>Read hub</button></div></header>
       <div id="message" role="status" hidden></div>
       <div id="snapshot-status" class="snapshot-status">Opening your session…</div>
       <section id="content" aria-live="polite"><div class="empty"><h1>Harmony configurator</h1><p>Open this page using the configurator button in the plugin’s Homebridge settings.</p></div></section>
@@ -24,4 +24,5 @@
     </main>
   </div>
   <dialog id="editor" aria-labelledby="editor-title"><form id="edit-form"><div class="dialog-head"><h2 id="editor-title">Review a change</h2><button id="close-editor" type="button" aria-label="Close editor">×</button></div><div id="editor-fields"></div><p id="editor-error" role="alert" hidden></p><div class="dialog-actions"><button id="cancel-editor" type="button">Cancel</button><button id="submit-editor" class="primary" type="submit">Save draft</button></div></form></dialog>
+  <dialog id="field-help" aria-labelledby="field-help-title" aria-describedby="field-help-text"><h2 id="field-help-title"></h2><p id="field-help-text"></p><div class="dialog-actions"><button id="close-field-help" type="button" autofocus>Close help</button></div></dialog>
 </body></html>

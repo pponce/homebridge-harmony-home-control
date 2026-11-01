@@ -1,3 +1,5 @@
+import { helpText } from './help.js';
+
 (() => {
   const $ = id => document.getElementById(id);
   let data, csrf, view = 'devices', selectedDevice, selectedActivity, contextDirty = false, localBusy = false, timer, editAction;
@@ -6,6 +8,23 @@
   const time = value => value ? new Date(value).toLocaleString() : 'not yet read';
   const badge = (text,warn = false) => e('span',text,`badge${warn ? ' warning' : ''}`);
   const p = text => e('p',text);
+  let fieldSequence = 0;
+  function helpButton(label, explanation) {
+    const b = e('button','?','field-help-button'); b.type = 'button';
+    b.setAttribute('aria-label',`Help for ${label}`); b.setAttribute('aria-haspopup','dialog');
+    b.setAttribute('aria-controls','field-help'); b.title = `Explain ${label}`;
+    b.onclick = () => {
+      $('field-help-title').textContent = label;
+      $('field-help-text').textContent = typeof explanation === 'function' ? explanation() : explanation;
+      $('field-help').showModal();
+    };
+    return b;
+  }
+  function helpLabel(label, explanation = helpText[label]) {
+    const n = e('span',undefined,'help-label'); n.append(e('span',label));
+    if (explanation) n.append(helpButton(label,explanation));
+    return n;
+  }
   function message(text,error = false) { $('message').textContent = text; $('message').hidden = !text; $('message').className = error ? 'error' : ''; }
   function button(label,run,cls = '') {
     const node = e('button',label,cls); node.type = 'button';
@@ -16,12 +35,21 @@
   function note(text,warn = false) { return e('p',text,`note${warn ? ' warning' : ''}`); }
   function panel(title,description) { const n = e('section',undefined,'panel'); if (title) n.append(e('h2',title)); if (description) n.append(e('p',description,'muted')); return n; }
   function details(title,contents) { const n = e('details'); n.append(e('summary',title),contents); return n; }
-  function field(parent,label,input,help) { const n = e('label',undefined,'field'); n.append(e('span',label),input); input.setAttribute('aria-label',label); if (help) n.append(e('small',help)); parent.append(n); return n; }
+  function field(parent,label,input,help) {
+    const n = e('div',undefined,'field'), row = e('div',undefined,'field-label'), caption = e('label',label);
+    input.id ||= `field-${++fieldSequence}`; caption.htmlFor = input.id; row.append(caption);
+    const hint = help ? e('small',help) : null;
+    if (helpText[label] || hint) row.append(helpButton(label,() => [helpText[label],hint?.textContent].filter(Boolean).join('\n\n')));
+    n.append(row,input); input.setAttribute('aria-label',label);
+    if (hint) { hint.id = `${input.id}-hint`; input.setAttribute('aria-describedby',hint.id); n.append(hint); }
+    parent.append(n); return n;
+  }
   function select(values,current = 'unknown') { const n = e('select'); for (const [value,label] of values) { const o = e('option',label); o.value = value; n.append(o); } n.value = current; if (n.selectedIndex < 0) n.value = 'unknown'; return n; }
   function table(headers,rows,cls = '') {
     const wrap = e('div',undefined,'table-wrap'), t = e('table',undefined,cls), head = e('thead'), hr = e('tr');
-    headers.forEach(h => { const th = e('th',h); th.scope = 'col'; hr.append(th); }); head.append(hr); t.append(head);
-    const body = e('tbody'); for (const row of rows) { const tr = e('tr'); for (const item of row) { const td = e('td'); td.append(item instanceof Node ? item : document.createTextNode(display(item))); tr.append(td); } body.append(tr); }
+    headers.forEach(h => { const th = e('th'); th.append(helpLabel(h)); th.scope = 'col'; hr.append(th); }); head.append(hr); t.append(head);
+    const settings = headers[0] === 'Setting' || cls === 'settings';
+    const body = e('tbody'); for (const row of rows) { const tr = e('tr'); row.forEach((item,index) => { const td = e('td'); td.append(settings && index === 0 && typeof item === 'string' ? helpLabel(item) : item instanceof Node ? item : document.createTextNode(display(item))); tr.append(td); }); body.append(tr); }
     t.append(body); wrap.append(t); return wrap;
   }
   function heading(title,description) { const n = e('div',undefined,'page-head'), text = e('div'); text.append(e('h1',title),p(description)); n.append(text,badge('Imported + your context')); return n; }
@@ -58,7 +86,7 @@
   }
   const deviceName = id => data.snapshot.devices.find(d => d.id === id)?.name || id || 'No device';
   function items(list,selected,choose) {
-    const n = e('div',undefined,'items'), search = e('input'); search.type = 'search'; search.placeholder = 'Find by name'; search.setAttribute('aria-label','Filter items'); n.append(search);
+    const n = e('div',undefined,'items'), search = e('input'); search.type = 'search'; search.placeholder = 'Find by name'; field(n,'Filter items',search);
     const buttons = list.map(item => { const b = button('',() => choose(item.id),item.id === selected ? 'active' : ''); b.append(e('span',item.name),e('small',item.model || `${item.roles?.length || 0} roles`)); n.append(b); return {item,b}; });
     search.oninput = () => { for (const {item,b} of buttons) b.hidden = !`${item.name} ${item.model || ''} ${item.manufacturer || ''}`.toLowerCase().includes(search.value.toLowerCase()); };
     return n;
@@ -74,7 +102,7 @@
     const d = s.devices.find(x => x.id === selectedDevice) || s.devices[0]; selectedDevice = d.id;
     const split = e('div',undefined,'split'), detail = e('div'); split.append(items(s.devices,d.id,id => {selectedDevice = id; render();}),detail); content.append(split);
     const card = panel(), head = e('div',undefined,'panel-head'), title = e('div'); title.append(e('h2',d.name),p([d.manufacturer,d.model].filter(Boolean).join(' · '))); head.append(title,badge('Imported')); card.append(head);
-    card.append(table(['Setting','Value'],[['Control transport',d.transport],['Control port',d.controlPort],['Command repeats',d.repeats],['Power command type',d.power.type === 1 ? 'Separate On / Off' : d.power.type === 2 ? 'Toggle' : d.power.type]]));
+    card.append(table(['Setting','Value'],[['Control transport',d.transportLabel || d.transport || 'Not reported by hub'],['Control port',d.controlPortLabel || d.controlPort || 'Not reported by hub'],['Command repeats',d.repeats],['Power command type',d.power.type === 1 ? 'Separate On / Off' : d.power.type === 2 ? 'Toggle' : d.power.type]]));
     card.append(note('Device power and delay changes can be drafted here. Apply them in the Harmony app, sync, then Read hub to verify.'));
     detail.append(card);
     const power = panel('Power behavior');
@@ -87,7 +115,7 @@
     detail.append(power);
     const delays = panel('Timing'); const delayFields = [['powerOn','Power-on delay'],['input','Input delay'],['interDevice','Inter-device delay'],['interKey','Inter-key delay']];
     delays.append(table(['Delay','Imported (ms)',''],delayFields.map(([key,label]) => [label,d.delays[key],editButton('device',d,`delays.${key}`,`${label} (ms)`,d.delays[key],key === 'interKey' ? 10000 : 60000)]),'settings')); detail.append(delays);
-    const inputs = panel('Inputs',`Input method: ${display(d.inputMethod)}`);
+    const inputs = panel('Inputs'), inputMethod = p(''); inputMethod.append(helpLabel('Input method'),document.createTextNode(`: ${display(d.inputMethod)}`)); inputs.append(inputMethod);
     inputs.append(d.inputs.length ? table(['Order','Input','Commands'],d.inputs.map(i => [i.order,i.name,i.actions.map(a => a.command || a.type).join(', ')])) : p('No inputs supplied by this device profile.'));
     const moreInput = e('div'); for (const [label,a] of Object.entries(d.inputActions)) moreInput.append(e('h3',label),actionsTable(a)); inputs.append(details('Input sequence actions',moreInput)); detail.append(inputs);
     const commands = panel(`${d.commands.length} available commands`), chips = e('div',undefined,'chips'); d.commands.forEach(c => chips.append(e('span',c,'chip'))); commands.append(details('Show command names',chips),e('p','Command names are inspected only; this page does not send them.','muted')); detail.append(commands);
@@ -99,7 +127,7 @@
     if (!s.activities.length) { content.append(note('This hub returned an empty activity list.')); return; }
     const a = s.activities.find(x => x.id === selectedActivity) || s.activities[0]; selectedActivity = a.id;
     const split = e('div',undefined,'split'), detail = e('div'); split.append(items(s.activities,a.id,id => {selectedActivity=id; render();}),detail); content.append(split);
-    const card = panel(a.name,`Activity type: ${display(a.type)}`);
+    const card = panel(a.name), activityType = p(''); activityType.append(helpLabel('Activity type'),document.createTextNode(`: ${display(a.type)}`)); card.append(activityType);
     card.append(table(['Setting','Imported',''],[['Name',a.name,editButton('activity',a,'name','Activity name',a.name,'text')],['Display order',a.order,editButton('activity',a,'order','Activity display order',a.order,1000)]])); detail.append(card);
     const roles = panel('Power order & inputs','Configured order is not a measured execution trace. Harmony can skip devices already on; CEC and automations can act independently.');
     const orderCell = (r,key,label,max=1000) => { const cell = e('div'); cell.append(e('div',display(r[key]),'value'),editButton('activity',a,key,`${deviceName(r.deviceId)} ${label}`,r[key],max,r.index)); return cell; };
@@ -155,7 +183,7 @@
     const grid = e('div',undefined,'recommendations'); content.append(grid);
     for (const a of data.suggestions) {
       const card = panel(); card.append(e('p',a.device,'device-label'),e('h2',a.title),badge(a.confidence,a.confidence.includes('input') || a.confidence.includes('mismatch')));
-      const dl = e('dl'); for (const [label,text] of [['Current / reported',a.current],['Suggested next step',a.proposed],['Why',a.why],['How to test',a.test]]) dl.append(e('dt',label),e('dd',text)); card.append(dl);
+      const dl = e('dl'); for (const [label,text] of [['Current / reported',a.current],['Suggested next step',a.proposed],['Why',a.why],['How to test',a.test]]) { const term = e('dt'); term.append(helpLabel(label)); dl.append(term,e('dd',text)); } card.append(dl);
       const actions = e('div',undefined,'actions'); if (a.deviceId) actions.append(button('Inspect device',() => {selectedDevice=a.deviceId; navigate('devices');})); actions.append(button('Update answers',() => navigate('assistant'))); card.append(actions);
       if (a.source) card.append(link('Manufacturer guidance ↗',a.source)); grid.append(card);
     }
@@ -180,7 +208,7 @@
     if (!data.drafts.length) { content.append(note('No changes drafted yet. Open a device or activity and choose Edit draft.')); return; }
     for (const d of data.drafts) {
       const card = panel(), head = e('div',undefined,'panel-head'), title = e('div'); title.append(e('h2',`${d.name} · ${d.label}`)); if (d.role !== undefined) title.append(p(`Activity role ${d.role+1}`)); head.append(title,badge(statusLabels[d.status] || d.status,!['draft','hub-confirmed'].includes(d.status))); card.append(head);
-      const diff = e('div',undefined,'change-diff'); for (const [label,value] of [['At import',d.before],['Proposed',d.value]]) {const block=e('div');block.append(e('span',label),e('strong',display(value)));diff.append(block);} card.append(diff);
+      const diff = e('div',undefined,'change-diff'); for (const [label,value] of [['At import',d.before],['Proposed',d.value]]) {const block=e('div');block.append(helpLabel(label),e('strong',display(value)));diff.append(block);} card.append(diff);
       if (d.error) card.append(note(d.error,true));
       if (d.status === 'conflict' || d.status === 'changed-again') card.append(note('Read the hub, inspect the current value and create a new draft. An existing draft is never silently rebased.',true));
       if (d.status === 'unconfirmed') card.append(note('The save may have reached Logitech. Check the activity in Harmony, sync if appropriate, then Read hub. This change will not be replayed automatically.',true));
@@ -202,7 +230,9 @@
     let input;
     if (type === 'boolean') input = select([['true','Yes'],['false','No']],String(before));
     else {input=e('input');input.type=type==='text'?'text':'number';input.value=before;if(type==='text')input.maxLength=64;else{input.min=0;input.max=type;input.step=1;}input.required=true;}
-    const block = e('div'); field(block,'Proposed value',input);
+    const block = e('div');
+    const explanation = ({'delays.powerOn':'Power-on delay','delays.input':'Input delay','delays.interDevice':'Inter-device delay','delays.interKey':'Inter-key delay','power.alwaysOn':'Harmony skips all power commands','power.betweenActivities':'Keep on between activities',name:'Name',order:'Display order',powerOnOrder:'On order',powerOffOrder:'Off order',nextDeviceDelay:'Next delay (ms)'})[target.field];
+    field(block,'Proposed value',input,helpText[explanation]);
     showEditor(label,[p(`Imported value: ${display(before)}`),block,note('Saving a draft does not change Harmony. Review it in Review changes to choose how to apply it.')],'Save draft',async () => {await mutate('draft',{revision,change:{...target,version,value:type==='boolean'?input.value==='true':type==='text'?input.value:Number(input.value)}});view='changes';render();message('Change saved as a local draft.');});
   }
   function confirmCloud(d) {
@@ -210,6 +240,8 @@
   }
   $('edit-form').onsubmit = async event => {event.preventDefault();$('submit-editor').disabled=true;try{await editAction();$('editor').close();}catch(error){$('editor-error').textContent=error.message;$('editor-error').hidden=false;if(view==='changes')render();}finally{$('submit-editor').disabled=false;}};
   $('cancel-editor').onclick = $('close-editor').onclick = () => $('editor').close();
+  $('close-field-help').onclick = () => $('field-help').close();
+  $('hub-label').append(helpButton('Harmony hub',helpText['Harmony hub']));
   function schedulePoll() {
     clearTimeout(timer); if (!data?.busy) return;
     timer = setTimeout(async () => {try{await load();if(!contextDirty && !$('editor').open)render();else updateToolbar();schedulePoll();}catch(error){message(error.message,true);}},2500);
@@ -240,7 +272,7 @@
       if(auth.usernameRequired){username.type='text';username.autocomplete='username';username.required=true;username.maxLength=64;field(form,'Configurator username',username);}
       password.type='password';password.autocomplete='current-password';password.required=true;password.maxLength=256;
       field(form,'Configurator password',password);
-      const remember=e('input');remember.type='checkbox';const label=e('label');label.append(remember,document.createTextNode('Remember this browser for 30 days'));form.append(label);
+      const remember=e('input');remember.type='checkbox';const rememberField=field(form,'Remember this browser for 30 days',remember);rememberField.classList.add('checkbox-field');
       const submit=e('button','Sign in','primary');submit.type='submit';form.append(submit);card.append(form);
       form.onsubmit=async event=>{event.preventDefault();submit.disabled=true;const credential=password.value;password.value='';try{({csrf}=await api('auth/login',{username:username.value,password:credential,remember:remember.checked}));await startApp();}catch(error){message(error.message,true);submit.disabled=false;}};
     } catch(error){message(error.message,true);}

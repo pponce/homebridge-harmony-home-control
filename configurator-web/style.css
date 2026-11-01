@@ -6,3 +6,21 @@
 
 /* Keep wide activity tables inside their own scroll container. */
 .split > * { min-width: 0; }
+
+/* Help buttons remain separate from labels so they never toggle a field. */
+.help-label,.field-label{display:inline-flex;align-items:center;gap:6px;max-width:100%;white-space:normal}
+.help-label>span,.field-label>label{min-width:0;overflow-wrap:anywhere}
+button.field-help-button{display:inline-grid;place-items:center;flex:0 0 28px;width:28px;height:28px;min-width:28px;min-height:28px;padding:0;border-radius:50%;font-size:12px;line-height:1;background:var(--accent-soft);border-color:var(--line);color:var(--accent);text-align:center;font-weight:700;text-transform:none;letter-spacing:0}
+button.field-help-button:hover{border-color:var(--accent)}
+button.field-help-button:focus-visible{outline:2px solid var(--accent)}
+.hub-field{display:flex;align-items:center;gap:12px;min-width:0}
+.hub-field .field-label{font-size:12px;color:var(--muted);font-weight:600}
+.checkbox-field{display:flex;align-items:center;gap:8px}
+.checkbox-field>input{order:-1;flex-shrink:0;margin:0}
+.items .field{margin-bottom:0}
+.items .field-label{font-size:12px}
+.change-diff .help-label{display:inline-flex;margin-bottom:4px}
+.change-diff .help-label>span{display:inline}
+#field-help{max-height:calc(100dvh - 30px);overflow:auto}
+#field-help-text{white-space:pre-line;overflow-wrap:anywhere}
+@media(max-width:760px){.hub-field{width:100%;flex-wrap:wrap}.hub-field select{flex:1;min-width:140px}.items .field{min-width:150px;flex-shrink:0}.items .field-label button.field-help-button{min-width:28px;max-width:28px;padding:0}.field-label{gap:8px}}

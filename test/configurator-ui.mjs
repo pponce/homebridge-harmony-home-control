@@ -19,6 +19,10 @@ const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
 try {
   const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.goto(server.origin);
+  await page.getByRole('button',{name:'Help for Configurator username',exact:true}).click();
+  assert.match(await page.locator('#field-help-text').textContent(),/local website username/);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#field-help').evaluate(n=>n.open),false);
   await page.getByLabel('Configurator username',{exact:true}).fill('wronguser');
   await page.getByLabel('Configurator password',{exact:true}).fill('browser-test-password');
   await page.getByRole('button',{name:'Sign in',exact:true}).click();
@@ -30,8 +34,28 @@ try {
   await page.waitForFunction(()=>!document.getElementById('read').disabled);
   await page.locator('#read').click();await page.getByRole('heading',{name:'Living room display'}).waitFor();
   assert.ok(!page.url().includes('access='));assert.equal(await page.locator('#device-count').textContent(),'2');
+  await page.getByText('Infrared (IR) (code 1)',{exact:true}).waitFor();
+  await page.getByText('Hub + Mini blaster 1 + Mini blaster 2 (code 7)',{exact:true}).waitFor();
+  const transportHelp=page.getByRole('button',{name:'Help for Control transport',exact:true});
+  await transportHelp.focus();await page.keyboard.press('Enter');
+  assert.match(await page.locator('#field-help-text').textContent(),/infrared.*Bluetooth/);
+  await page.keyboard.press('Escape');assert.ok(await transportHelp.evaluate(n=>n===document.activeElement));
+  await page.getByRole('button',{name:'Help for Control port',exact:true}).click();
+  await page.screenshot({path:join(artifacts,'ui-configurator-field-help.png'),fullPage:true});
+  await page.getByRole('button',{name:'Close help',exact:true}).click();
+  await page.getByRole('button',{name:'Game console',exact:false}).click();
+  assert.equal(await page.getByText('Not reported by hub',{exact:true}).count(),2);
+  await page.locator('.items').getByRole('button',{name:'Living room display',exact:false}).click();
   await page.getByRole('button',{name:'Setup Assistant',exact:true}).click();
+  assert.equal(await page.locator('.assistant-grid .field').count(),await page.locator('.assistant-grid .field-help-button').count());
+  const sleep=page.getByLabel('Who should put it to sleep?',{exact:true}).nth(1), beforeSleep=await sleep.inputValue();
+  await page.getByRole('button',{name:'Help for Who should put it to sleep?',exact:true}).nth(1).click();
+  assert.match(await page.locator('#field-help-text').textContent(),/multiple connected devices/);
+  await page.getByRole('button',{name:'Close help',exact:true}).click();assert.equal(await sleep.inputValue(),beforeSleep);
   await page.getByLabel('Device type',{exact:true}).nth(1).selectOption('switch');
+  await page.getByRole('button',{name:'Help for HDMI-CEC is',exact:true}).nth(1).click();
+  assert.match(await page.locator('#field-help-text').textContent(),/Match TV Power State/);
+  await page.getByRole('button',{name:'Close help',exact:true}).click();
   await page.getByLabel('HDMI output connects to',{exact:true}).nth(1).selectOption('101');
   await page.getByLabel('Input on that destination',{exact:true}).nth(1).fill('HDMI 1');
   await page.getByLabel('HDMI-CEC is',{exact:true}).nth(1).selectOption('on');
@@ -43,6 +67,9 @@ try {
   await page.screenshot({path:join(artifacts,'ui-configurator-suggestions.png'),fullPage:true});
   await page.getByRole('button',{name:/^Activities/}).click();
   await page.getByRole('button',{name:'Edit Activity name for Play a game',exact:true}).click();
+  await page.getByRole('button',{name:'Help for Proposed value',exact:true}).click();
+  assert.match(await page.locator('#field-help-text').textContent(),/activity’s display name/);
+  await page.keyboard.press('Escape');assert.equal(await page.locator('#editor').evaluate(n=>n.open),true);
   await page.getByLabel('Proposed value',{exact:true}).fill('Play <game>');await page.getByRole('button',{name:'Save draft',exact:true}).click();
   await page.getByRole('heading',{name:'Review changes',exact:true}).waitFor();assert.equal(await page.locator('game').count(),0);
   await page.getByLabel('Logitech email',{exact:true}).fill('fake@example.invalid');await page.getByLabel('Logitech password',{exact:true}).fill('fake-password');
@@ -60,6 +87,10 @@ try {
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.screenshot({path:join(artifacts,'ui-configurator-mobile.png'),fullPage:true});
   await page.emulateMedia({colorScheme:'dark'});await page.getByRole('button',{name:/^Devices/}).click();await page.screenshot({path:join(artifacts,'ui-configurator-dark.png'),fullPage:true});
+  await page.getByRole('button',{name:'Help for Control port',exact:true}).click();
+  const helpBox=await page.locator('#field-help').boundingBox();assert.ok(helpBox.x>=0 && helpBox.x+helpBox.width<=390);
+  await page.screenshot({path:join(artifacts,'ui-configurator-help-mobile-dark.png'),fullPage:true});
+  await page.getByRole('button',{name:'Close help',exact:true}).click();
   offline=true;await page.locator('#read').click();await page.getByText(/Last read failed:/).waitFor();assert.equal(await page.locator('#device-count').textContent(),'2');
   await page.getByRole('button',{name:'Sign out',exact:true}).click();
   await page.getByLabel('Configurator password',{exact:true}).waitFor();
@@ -68,5 +99,5 @@ try {
   await page.goto(server.accessLink().url);
   await page.waitForFunction(()=>!document.getElementById('read').disabled);
   assert.deepEqual(errors,[]);
-  console.log('Configurator browser workflow passed: import, assistant persistence, conditional advice, manual drafts, cloud review/save/sync, stale read, HTML escaping, mobile and dark mode.');
+  console.log('Configurator browser workflow passed: numeric control settings, accessible field help, keyboard/focus, nested dialogs, unchanged form values, assistant persistence, conditional advice, manual drafts, cloud review/save/sync, stale read, HTML escaping, mobile and dark mode.');
 } finally {await browser.close();await server.close();await rm(directory,{recursive:true,force:true});}

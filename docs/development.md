@@ -37,3 +37,5 @@ Protocol research used the projects below. Implementations here are independent;
 - [Root-free Harmony resource reads](https://github.com/sapn95/harmony-mcp)
 - [Harmony Terraform provider cloud protocol](https://github.com/steverice/terraform-provider-harmony/tree/0a223922510b21e77a797b5204803af4ee6343b6/internal/harmony)
 - [Congruity MyHarmony service contracts](https://github.com/congruity/congruity)
+- [Native numeric device-control examples](https://github.com/schlambos/harmony-hub-control/blob/main/tools/hub-emu/seed/resources/DeviceList.json)
+- [Harmony NG IR output bitmask reference](https://github.com/iranl/harmony-ng/blob/44fcb46a8a38a9b6490a8049ca801649379ce4b0/docs/API.md#51-send-direct-ir-command)

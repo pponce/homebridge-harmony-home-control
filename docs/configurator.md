@@ -18,6 +18,10 @@ If the hub cannot be read, check its saved IPv4 address and TCP port 8088. Firmw
 
 ## What you can inspect and edit
 
+Select the small **?** beside a field or table column for an explanation. Help opens with a click, tap, or keyboard activation; **Close help** or **Escape** returns to the field without changing it. Help is also available in the Setup Assistant, sign-in forms, and draft editor.
+
+Device control settings preserve both numeric and text values from the hub. Known transport codes display names such as **Infrared (IR)** and **Bluetooth**. Infrared output assignments identify the hub and mini blasters while retaining the original code. Bluetooth control does not use an IR emitter assignment. Unfamiliar codes remain visible without assuming a meaning; **Not reported by hub** means no usable value was supplied. Choose **Read hub** after updating the plugin to refresh the imported settings.
+
 | Configuration | Inspect | Apply changes |
 | --- | --- | --- |
 | Devices, available command names, power actions and input actions | Imported when supplied by the hub | Inspect only |
@@ -35,7 +39,11 @@ Cloud writes use an unofficial protocol and have automated fixture coverage. Val
 
 ## Setup Assistant and suggestions
 
-Describe each device’s HDMI destination and input, CEC state, wake and sleep owner, desired behavior when switching away, and behavior on All Off. **I’m not sure** is a valid answer. Device-specific hints explain where to look for settings. Answers survive child-bridge restarts.
+Describe each device’s HDMI destination and input, CEC state, intended main wake and sleep method, desired behavior when switching away, and behavior on All Off. **I’m not sure** is a valid answer. Device-specific hints explain where to look for settings. Answers survive child-bridge restarts.
+
+The wake/sleep questions select the main method intended for activity startup or shutdown. They do not restrict other controllers. **HDMI-CEC** describes the method and may include commands from multiple connected devices. HomeKit/Homebridge buttons or automations can also control power. Record additional methods, senders, and triggers in the notes; these single-choice answers are not a complete inventory of every possible power-control path.
+
+For HDMI wiring, follow video from an output to an input: a source such as a console connects to a receiver input, then the receiver output connects to a TV input. Several sources can select the same receiver as their destination. ARC/eARC can return TV audio over that receiver-to-TV cable and is separate from CEC power control. Include both port labels, ARC/eARC details, and any additional outputs or switches in the notes; the current destination field describes one video-output connection per device.
 
 Use the notes for individual CEC switches and HomeKit automations, including trigger, delay, conditions and action. Notes are preserved for manual review; the configurator does not execute automations or claim to understand free text automatically.
 
