@@ -1,4 +1,5 @@
 import { helpText } from './help.js';
+import { keycodeData } from './ir-code.js';
 import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inputMethodLabel, formatDraftValue, connectionsFor, pathsFor, powerMethods, methodsFor } from './settings.js';
 
 (() => {
@@ -157,6 +158,17 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
         for(const [index,code] of supplied.entries()) {
           const content=e('div');
           for(const [key,label] of [['keyCode','Harmony keycode'],['raw','Raw data']]) if(code[key]) {const box=e('textarea');box.readOnly=true;box.value=code[key];field(content,label,box);box.setAttribute('aria-label',`${label} for ${code.name}`);}
+          if(code.keyCode) {
+            const values=keycodeData(code.keyCode);
+            if(values?.length) for(const [index,value] of values.entries()) {
+              const group=e('fieldset',undefined,'sequence-row'),label=`${value.phase} data · segment ${value.segment}`;group.append(e('legend',label));
+              for(const [key,label] of [['hex','Hexadecimal'],['binary','Binary']]) {
+                const box=e('textarea',undefined,'code-value');box.readOnly=true;box.rows=2;box.value=value[key];field(group,label,box);box.setAttribute('aria-label',`${label} for ${code.name} (${value.phase}, segment ${value.segment}, value ${index+1})`);
+              }
+              content.append(group);
+            }
+            else content.append(p(values ? 'This keycode uses named protocol segments with no hexadecimal data values.' : 'Hexadecimal and binary views are unavailable for this keycode format.'));
+          }
           content.append(table(['Protocol ID','Transport type','Learned'],[[code.protocolId,code.transport,code.learned]]));
           const row=details(code.name,content);row.querySelector('details').open=index===0;commands.append(row);
         }

@@ -46,5 +46,6 @@ button.field-help-button:focus-visible{outline:2px solid var(--accent)}
 
 .sequence-row{min-width:0;margin:12px 0;padding:14px;border:1px solid var(--line);border-radius:10px}
 .sequence-row legend{padding:0 5px;font-weight:600;font-size:13px}
+.code-value{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;min-height:70px}
 .cloud-form{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 @media(max-width:760px){.cloud-form{grid-template-columns:1fr}}

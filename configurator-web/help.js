@@ -33,6 +33,8 @@ export const helpText = {
   "Configure input switching": "Choose the method that matches the device. Edit each input’s selection commands and any shared Start, Next, Previous or Finish sequences. Save required commands before changing the method, then compile and sync after completing the changes. Unsupported cloud method representations still require Harmony Input Settings.",
   'Available commands': 'Command names reported for this Harmony device profile. This is an inventory, not a live remote control; viewing it sends nothing. Add or learn missing commands in Harmony, sync and Read hub to refresh the list.',
   'Harmony keycode': 'Logitech’s encoded command, shown exactly as supplied. Generating an IR waveform requires its matching protocol definition. This value is not Pronto hex.',
+  'Hexadecimal': 'A data value from the Harmony keycode, grouped for reading. Leading zeros are preserved. Start, Repeat and Finish identify when the value is used; the segment identifies a part of the protocol.',
+  'Binary': 'The same data value written as zeros and ones, with four bits for every hexadecimal digit. The protocol definition determines how the value is padded, encoded and transmitted.',
   'Raw data': 'The optional Raw field supplied by Logitech, preserved exactly. Its encoding is not assumed to be Pronto hex.',
   'Protocol ID': 'The protocol identifier supplied by Logitech for this command.',
   'Transport type': 'Logitech’s command transport value, shown as supplied.',

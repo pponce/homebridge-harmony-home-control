@@ -13,11 +13,11 @@ let mapLoadMode='success',irLoadMode='success',releaseRead,readStarted;
 imported.resources.MapList.ButtonMaps.push({'Id-':502,'DeviceId-':101,Buttons:[{TextOnRemote:'Receiver power',ButtonId:'soft-1',ButtonAction:{__type:'ButtonCommandAction',CommandName:'PowerOn',DeviceId:{Value:101}}},{ButtonId:'help',ButtonAction:{__type:'ButtonClientAction',ActionName:'Help'}}],Sequences:[]});
 const cloudButton={key:'Power',id:'button-1',type:'HardRemoteButton',label:'',group:'Power',press:{kind:'command',deviceId:'101',command:'PowerOn'},long:null,double:null};
 const addedButtons=[];
-const irKeyCode='G:Sony 12 Bit:()(0x8D1)():3';
+const irKeyCode='G:Toshiba 32 Bit:(0xA156F609)(Repeat)():3';
 const irCodes=[
   {name:'PowerOn',raw:null,rawState:'not-supplied',keyCode:irKeyCode,keyCodeState:'supplied',protocolId:'9',transport:'32',learned:false},
   {name:'PowerOff',raw:'\n0000 006D 0002\n',rawState:'supplied',keyCode:null,keyCodeState:'not-supplied',protocolId:'9',transport:'1',learned:true},
-  {name:'Menu',raw:null,rawState:'not-supplied',keyCode:null,keyCodeState:'not-supplied',protocolId:'9',transport:'1',learned:null}
+  {name:'Menu',raw:null,rawState:'not-supplied',keyCode:'opaque-keycode',keyCodeState:'supplied',protocolId:'9',transport:'1',learned:null}
 ];
 async function mockInfraredCodes() {
   if(irLoadMode==='delay')await new Promise(resolve=>{releaseRead=resolve;readStarted();});
@@ -258,9 +258,12 @@ try {
   const metadata=JSON.parse(await readFile(await (await metadataDownloadPromise).path(),'utf8'));assert.equal(metadata.commands.length,3);assert.equal(metadata.commands[0].raw,null);assert.equal(metadata.commands[0].keyCode,null);assert.equal(metadata.commands[1].keyCodeState,'unsupported');
   irLoadMode='delay';const started=new Promise(resolve=>{readStarted=resolve;});await page.getByRole('button',{name:'Load IR codes',exact:true}).click();await page.getByText('Loading from Logitech…',{exact:true}).waitFor();await started;
   assert.equal(await page.getByRole('button',{name:'Loading…',exact:true}).isDisabled(),true);releaseRead();irLoadMode='success';
-  await page.getByText('2 of 3 commands include code data.',{exact:true}).waitFor();
+  await page.getByText('3 of 3 commands include code data.',{exact:true}).waitFor();
   assert.equal(await page.getByLabel('Harmony keycode for PowerOn',{exact:true}).isVisible(),true);assert.equal(await page.getByLabel('Harmony keycode for PowerOn',{exact:true}).inputValue(),irKeyCode);
+  const hex=page.getByLabel('Hexadecimal for PowerOn (Start, segment 0, value 1)',{exact:true}),binary=page.getByLabel('Binary for PowerOn (Start, segment 0, value 1)',{exact:true});
+  assert.equal(await hex.isVisible(),true);assert.equal(await hex.inputValue(),'A1 56 F6 09');assert.equal(await binary.inputValue(),'10100001 01010110 11110110 00001001');assert.equal(await hex.evaluate(n=>n.readOnly),true);assert.equal(await binary.evaluate(n=>n.readOnly),true);
   await page.locator('summary').filter({hasText:/^PowerOff$/}).click();assert.equal(await page.getByLabel('Raw data for PowerOff',{exact:true}).inputValue(),'\n0000 006D 0002\n');
+  await page.locator('summary').filter({hasText:/^Menu$/}).click();assert.equal(await page.getByLabel('Harmony keycode for Menu',{exact:true}).inputValue(),'opaque-keycode');await page.getByText('Hexadecimal and binary views are unavailable for this keycode format.',{exact:true}).waitFor();
   const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Export command data (JSON)',exact:true}).click();const download=await downloadPromise;
   assert.equal(download.suggestedFilename(),'harmony-command-codes-101.json');const exported=JSON.parse(await readFile(await download.path(),'utf8'));assert.equal(exported.format,'harmony-command-code-export');assert.deepEqual(exported.device,{id:'101',name:'Living room display'});assert.deepEqual(exported.commands,irCodes);
   await page.screenshot({path:join(artifacts,'ui-configurator-ir-codes.png'),fullPage:true});

@@ -62,6 +62,8 @@ Under **Button maps**, choose **Load cloud button maps** after saving a Logitech
 
 For an infrared device, **Load IR codes** retrieves its command data from Logitech. Each command can include a **Harmony keycode**, **Raw data**, a protocol ID, transport type and learned status. The first command with code data opens automatically. **Command details** lists every returned command and shows which representations were supplied or could not be read. Use **Export command data (JSON)** beside the result count to download all returned commands, including entries without code data.
 
+Expand a command to see its keycode’s data values in **Hexadecimal** and **Binary**. Each value is labeled by its Start, Repeat or Finish sequence and protocol segment. Leading zeros are preserved, with four binary digits per hexadecimal digit. For example, `A156F609` appears as `A1 56 F6 09` and `10100001 01010110 11110110 00001001`. These views show the values written in the keycode; the protocol definition determines how they become a transmitted signal.
+
 Harmony keycodes use Logitech’s encoding; rendering them as IR waveforms requires the matching protocol definition. Raw data is preserved in its supplied format. The viewer does not convert either representation to Pronto hex or transmit commands. Command data is held for the current session and excluded from the general review export.
 
 Both load controls show progress, empty results and errors beside the button. A Logitech rejection identifies the failed request and includes a numeric fault code when available. If a reload fails, any previously loaded data stays visible and is labeled accordingly.
