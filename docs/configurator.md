@@ -20,7 +20,7 @@ If the hub cannot be read, check its saved IPv4 address and TCP port 8088. Firmw
 
 Select the small **?** beside a section, field, table column or expandable group for an explanation. Help opens with a click, tap, or keyboard activation; **Close help** or **Escape** returns without changing the field or expanding the group. Informational sections also explain where to configure the setting in Harmony.
 
-The **Value** column shows the setting from the most recent **Read hub**. **Yes** and **No** describe the named setting, not whether importing succeeded. **Value (ms)** shows delays in milliseconds. In draft review, **Original value** is the value from the snapshot used to create the draft.
+The **Value** column shows the setting from the most recent **Read hub**. **Not supplied** or **Not reported by hub** means the hub did not provide a value for that setting. **Value (ms)** shows delays in milliseconds. In draft review, **Original value** is the value recorded when the draft was created.
 
 Device control settings preserve both numeric and text values from the hub. Known transport codes display names such as **Infrared (IR)** and **Bluetooth**. Infrared output assignments identify the hub and mini blasters while retaining the original code. Bluetooth control does not use an IR emitter assignment. Unfamiliar codes remain visible without assuming a meaning; **Not reported by hub** means no usable value was supplied. Choose **Read hub** after updating the plugin to refresh the imported settings.
 
