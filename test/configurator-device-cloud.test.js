@@ -30,6 +30,11 @@ test('device writes preserve vendor members, namespace scope and schema order fo
     const patched=devicePatch(raw.replace('<d:InterKeyDelay>100</d:InterKeyDelay>',fieldXml),{...change,before:null});assert.equal(field(patched,root(patched),'InterKeyDelay'),'250');
     assert.ok(!child(root(patched),'InterKeyDelay').attributes['i:nil']);
   }
+  const unusual='<d:InterKeyDelay xmlns:i.x="http://www.w3.org/2001/XMLSchema-instance" xmlns:iYx="urn:metadata" iYx:nil="keep" i.x:nil="true"/>';
+  const unusualPatched=devicePatch(raw.replace('<d:InterKeyDelay>100</d:InterKeyDelay>',unusual),{...change,before:null});
+  assert.equal(child(root(unusualPatched),'InterKeyDelay').attributes['iYx:nil'],'keep');
+  assert.equal(child(root(unusualPatched),'InterKeyDelay').attributes['i.x:nil'],undefined);
+  assert.equal(field(unusualPatched,root(unusualPatched),'InterKeyDelay'),'250');
   assert.throws(()=>devicePatch(raw.replace('<d:Transport>1</d:Transport>','<d:Transport>32</d:Transport>'),draft('controlPort','2')),/infrared/);
 });
 test('feature saves preserve inputs and unknown fields while changing policy, timing or order',()=>{
