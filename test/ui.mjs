@@ -41,7 +41,7 @@ let page;
 try {
   page = await browser.newPage({ viewport: { width: 1000,height: 900 } }); const errors = []; page.on('pageerror',error => { errors.push(error.message); console.error('Browser error:',error.message); });
   await page.exposeFunction('bridgeRequest',async (path,body) => {
-    if (path === '/configurator/password') { assert.equal(body.password,'browser-setup-password'); return {ok:true}; }
+    if (path === '/configurator/password') { assert.equal(body.password,'testpass'); return {ok:true}; }
     if (path === '/bootstrap') return { addresses: [{ name: 'eth0',address: '192.168.1.2' }],huePlatforms: [{ name: 'Hue',hosts: [] }],pickerCategories: PICKER_CATEGORIES };
     if (path === '/validate') return { hash: configHash(validateConfig(body)) };
     if (path === '/hue/discover') return { bridges: [realBridge] };
@@ -91,8 +91,8 @@ try {
   await page.locator('#address').selectOption('192.168.1.2'); await page.locator('#hubs').fill('192.168.1.3'); await page.locator('#hubs').dispatchEvent('change');
   await page.waitForFunction(() => !document.getElementById('save').disabled);
   await page.getByText('Direct website sign-in',{exact:true}).click();
-  await page.locator('#configurator-password').fill('browser-setup-password');
-  await page.locator('#configurator-password-confirm').fill('browser-setup-password');
+  await page.locator('#configurator-password').fill('testpass');
+  await page.locator('#configurator-password-confirm').fill('testpass');
   await page.locator('#set-configurator-password').click();
   await page.getByText('Password set. Open your configurator URL directly and sign in. Previous sessions were revoked.',{exact:true}).waitFor();
   assert.equal(await page.locator('#configurator-password').inputValue(),'');
@@ -225,7 +225,7 @@ try {
   await page.waitForFunction(() => document.getElementById('save-state').textContent.includes('restart needed'));
   assert.equal(await page.locator('#save').isDisabled(),true); assert.match(await page.locator('#save-state').textContent(),/restart needed/);
   assert.equal(await page.evaluate(() => window.outerSaveEnabled),true,'Outer Save remains available after embedded save for the host restart workflow');
-  assert.ok(!JSON.stringify(saved).includes('browser-setup-password'));
+  assert.ok(!JSON.stringify(saved).includes('testpass'));
   assert.equal(saved.configuratorPublicUrl,'https://harmony.example.com');
   assert.equal(saved.hueDevices.length,2); assert.equal(saved.rokuButtons.length,1); assert.equal(saved.hueBridges.length,1);
   assert.ok(!JSON.stringify(saved).includes('apiKey'));

@@ -80,7 +80,7 @@ Nginx handles the browser certificate; leave the plugin's certificate paths empt
 
 ## Direct website sign-in
 
-After enabling the configurator and restarting the child bridge, open **Direct website sign-in** in the Homebridge plugin settings. Enter and confirm a separate password of 12–256 characters and choose **Set password**. This takes effect immediately; no bridge restart is needed. Use your HTTPS configurator URL directly and sign in.
+After enabling the configurator and restarting the child bridge, open **Direct website sign-in** in the Homebridge plugin settings. Enter and confirm a separate password of 8–256 characters and choose **Set password**. This takes effect immediately; no bridge restart is needed. Use your HTTPS configurator URL directly and sign in.
 
 Select **Remember this browser for 30 days** to keep access across browser and child-bridge restarts. Without it, access lasts up to 12 hours and ends when the child bridge restarts; the cookie also expires with the browser session. Remembered sessions expire 30 days after sign-in, without extending on use. Logitech sign-in remains separate and is never remembered across bridge restarts.
 

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { ConfiguratorAuth } from '../lib/configurator/auth.js';
 import { ConfiguratorServer } from '../lib/configurator/server.js';
 import { normalizeConfig } from '../lib/config.js';
-const password='test-only long password';
+const password='testpass';
 async function fixture(t) {
   const directory=await mkdtemp(join(tmpdir(),'hhc-auth-'));
   t.after(()=>rm(directory,{recursive:true,force:true}));
@@ -14,7 +14,7 @@ async function fixture(t) {
 }
 test('password hashes and remembered sessions survive restart without storing credentials or bearer tokens',async t=>{
   const {directory,auth}=await fixture(t);
-  assert.throws(()=>auth.setPassword('short'),/12–256/);
+  assert.throws(()=>auth.setPassword('1234567'),/8–256/);
   await auth.setPassword(password);
   await assert.rejects(auth.login('wrong',true),/Incorrect/);
   const remembered=await auth.login(password,true), temporary=await auth.login(password,false);

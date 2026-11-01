@@ -463,7 +463,7 @@
       $('refresh-status').onclick = refreshStatus;
       $('set-configurator-password').onclick = async () => {
         const password = $('configurator-password').value;
-        if(password.length<12 || password.length>256 || password!==$('configurator-password-confirm').value) { $('configurator-auth-status').textContent='Enter matching passwords of 12–256 characters.'; return; }
+        if(password.length<8 || password.length>256 || password!==$('configurator-password-confirm').value) { $('configurator-auth-status').textContent='Enter matching passwords of 8–256 characters.'; return; }
         $('configurator-password').value=''; $('configurator-password-confirm').value='';
         $('set-configurator-password').disabled=true;
         try {await homebridge.request('/configurator/password',{password});$('configurator-auth-status').textContent='Password set. Open your configurator URL directly and sign in. Previous sessions were revoked.';}
