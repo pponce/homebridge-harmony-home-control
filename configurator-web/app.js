@@ -174,7 +174,7 @@
       const submit = e('button','Sign in','primary'); submit.type = 'submit'; form.append(submit);
       form.onsubmit = async event => {event.preventDefault(); const credentials = {email:email.value,password:password.value}; password.value = ''; submit.disabled = true; try {await mutate('login',credentials);render();message('Logitech account matched to this hub.');} catch (error) {message(error.message,true);submit.disabled=false;} finally {credentials.password='';}};
       cloud.append(form,e('p','Logitech email/password accounts only. Social and legacy logins are not supported.','muted'));
-    } else cloud.append(note('Cloud sign-in is available over HTTPS or a localhost SSH tunnel. Configure certificate paths in the plugin settings. Hub inspection, answers, drafts and manual guidance work on this connection.',true));
+    } else cloud.append(note('Cloud sign-in requires HTTPS or a localhost SSH tunnel. Use an HTTPS reverse proxy, or optionally configure a certificate for the plugin’s webserver. Hub inspection, answers, drafts and manual guidance work on this HTTP connection.',true));
     if (data.sync?.host === data.host) cloud.append(note(`${data.sync.status}: ${data.sync.message}`,data.sync.status === 'failed'));
     content.append(cloud);
     if (!data.drafts.length) { content.append(note('No changes drafted yet. Open a device or activity and choose Edit draft.')); return; }

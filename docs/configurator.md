@@ -93,3 +93,7 @@ Existing password-only setups remain usable after updating. Save a username and 
 ## Phone home-screen shortcut
 
 The configurator includes a browser tab icon and phone home-screen icon. In Safari on iPhone, open the direct configurator URL, choose **Share → Add to Home Screen**, and name it Harmony. On Android, use your browser’s **Add to Home screen** option. The shortcut opens the configurator in a standalone window where supported; it still requires a connection to the Homebridge server. Choose Remember this browser when signing in from the shortcut to retain access.
+
+## Optional HTTPS certificate for the web configurator
+
+The certificate and private-key fields enable HTTPS directly on the plugin’s webserver; they are not Logitech account certificates. Leave both fields empty to use local HTTP through the **Open configurator** button in Homebridge settings. Hub inspection, answers and drafts do not require a certificate. Leave them empty also when an HTTPS reverse proxy such as Nginx handles the browser connection. Entering a configurator password or Logitech credentials requires HTTPS or a localhost SSH tunnel.
