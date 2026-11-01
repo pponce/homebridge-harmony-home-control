@@ -14,8 +14,8 @@ export const helpText = {
   'Reported default': 'A separate default value explicitly supplied by the device profile. It is not substituted for a missing current value. “Unknown” means the import does not report a default; no universal value is assumed.',
   'Reported default (ms)': 'The delay default explicitly supplied by the device profile, in milliseconds. It is shown separately and is not treated as the active delay. Unknown means the hub did not report it.',
   'Setting': 'A named setting from the imported Harmony configuration. Use its question mark for the meaning and supported editing workflow.',
-  'Imported': 'The value saved in the most recent Read hub snapshot. This is not a live reading. Not supplied means the value is unknown, not zero or a known default.',
-  'Imported (ms)': 'The imported delay in milliseconds. 1000 ms is one second. Not supplied means the active delay is unknown; a separately reported default is shown in its own column.',
+  'Value': 'The setting’s value from the most recent Read hub. Yes and No answer the named setting; they do not say whether importing succeeded. For example, No beside “Harmony skips all power commands” means that skip setting is off. Numbers and text are the reported setting. “Not supplied” or “Not reported by hub” means no value was available for this field; it does not mean No, zero or a known default. This is a saved reading, not live device status. Read failures appear in the status message above the page.',
+  'Value (ms)': 'The delay reported by the most recent Read hub, in milliseconds. 1000 ms is one second; 0 is a reported zero delay. “Not supplied” means no value was available for this field, not zero or a failed import. Any separately reported profile default appears in its own column. This is a saved reading, not live device status.',
   'Delay': 'A pause used by Harmony while sending commands. Each kind of delay affects a different part of the sequence; use the help next to its name.',
   'Power behavior': 'These settings determine whether Harmony sends power commands and keeps a device on between activities. Other controllers, HDMI-CEC and automations can still act. Draft changes here and apply them using Harmony Power Settings.',
   'Power actions': 'The commands and pauses stored for powering on, powering off or toggling this device. This inspector does not run or edit raw action sequences. Configure the commands in Harmony → Devices → this device → Power Settings, then sync and Read hub.',
@@ -106,6 +106,6 @@ export const helpText = {
   'Suggested next step': 'An action for you to review. Suggestions do not change any setting automatically.',
   'Why': 'The reason this recommendation follows from the imported settings and your answers.',
   'How to test': 'A manual check after reviewing or applying a change. Compare cold startup, activity switches, and All Off where relevant.',
-  'At import': 'The saved Harmony value when this draft was created. A later read can show whether it changed.',
+  'Original value': 'The setting’s value from the hub snapshot used to create this draft. Yes and No describe the named setting, not import success. “Not supplied” means the original value was unknown. A later Read hub can verify whether the proposed change was applied.',
   'Proposed': 'The replacement value in this draft. Its status shows whether it is only proposed, saved to Logitech, or confirmed on the hub.',
 };

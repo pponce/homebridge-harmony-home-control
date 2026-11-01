@@ -109,7 +109,7 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
     const d = s.devices.find(x => x.id === selectedDevice) || s.devices[0]; selectedDevice = d.id;
     const split = e('div',undefined,'split'), detail = e('div'); split.append(items(s.devices,d.id,id => {selectedDevice = id; render();}),detail); content.append(split);
     const card = panel(), head = e('div',undefined,'panel-head'), title = e('div'); title.append(titleRow('h2',d.name,helpText['Device details']),p([d.manufacturer,d.model].filter(Boolean).join(' · '))); head.append(title,badge('Imported')); card.append(head);
-    card.append(table(['Setting','Imported','Reported default',''],[
+    card.append(table(['Setting','Value','Reported default',''],[
       ['Control transport',d.transportLabel || d.transport || 'Not reported by hub','Unknown',p('Determined by the device profile')],
       ['Control port',d.controlPortLabel || d.controlPort || 'Not reported by hub','Unknown',isInfrared(d) ? editButton('device',d,'controlPort') : p(d.transport ? 'IR assignment requires infrared control' : 'Read hub to identify the transport')],
       ['Command repeats',d.repeats,d.defaults?.repeats ?? 'Unknown',editButton('device',d,'repeats')],
@@ -119,7 +119,7 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
     card.append(note('Device drafts are proposals. Apply them in Harmony, sync, then Read hub to verify. Settings available in Harmony can vary by device profile.'));
     detail.append(card);
     const power = panel('Power behavior');
-    power.append(table(['Setting','Imported',''],[
+    power.append(table(['Setting','Value',''],[
       ['Harmony skips all power commands',d.power.alwaysOn,editButton('device',d,'power.alwaysOn')],
       ['Keep on between activities',d.power.betweenActivities,editButton('device',d,'power.betweenActivities')]
     ],'settings'));
@@ -127,8 +127,8 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
     for (const [label,a] of [['On',d.power.on],['Off',d.power.off],['Toggle',d.power.toggle]]) { actionDetail.append(titleRow('h3',label),actionsTable(a)); }
     detail.append(power);
     const delays = panel('Timing'); const delayFields = [['powerOn','Power-on delay'],['input','Input delay'],['interDevice','Inter-device delay'],['interKey','Inter-key delay']];
-    delays.append(table(['Delay','Imported (ms)','Reported default (ms)',''],delayFields.map(([key,label]) => [label,d.delays[key],d.defaults?.delays?.[key] ?? 'Unknown',editButton('device',d,`delays.${key}`)]),'settings')); detail.append(delays);
-    const inputs = panel('Inputs'); inputs.append(table(['Setting','Imported',''],[['Input method',inputMethodLabel(d.inputMethod),editButton('device',d,'inputMethod')]]));
+    delays.append(table(['Delay','Value (ms)','Reported default (ms)',''],delayFields.map(([key,label]) => [label,d.delays[key],d.defaults?.delays?.[key] ?? 'Unknown',editButton('device',d,`delays.${key}`)]),'settings')); detail.append(delays);
+    const inputs = panel('Inputs'); inputs.append(table(['Setting','Value',''],[['Input method',inputMethodLabel(d.inputMethod),editButton('device',d,'inputMethod')]]));
     if (!d.inputMethod && d.inputs.length) inputs.append(p('The hub supplied the input list and commands, but no input method. The list alone does not establish the method or a default.'));
     inputs.append(d.inputs.length ? table(['Input order','Input','Commands'],orderedInputs(d).map(i => [i.order,i.name,i.actions.map(a => a.command || a.type).join(', ')])) : p('No inputs supplied by this device profile.'));
     if (d.inputs.length && d.inputs.every(i => i.name) && new Set(d.inputs.map(i => i.name)).size === d.inputs.length) inputs.append(editButton('device',d,'inputOrder'));
@@ -147,7 +147,7 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
     const a = s.activities.find(x => x.id === selectedActivity) || s.activities[0]; selectedActivity = a.id;
     const split = e('div',undefined,'split'), detail = e('div'); split.append(items(s.activities,a.id,id => {selectedActivity=id; render();}),detail); content.append(split);
     const card = panel(a.name,undefined,helpText['Activity details']), activityType = p(''); activityType.append(helpLabel('Activity type'),document.createTextNode(`: ${display(a.type)}`)); card.append(activityType);
-    card.append(table(['Setting','Imported',''],[['Name',a.name,editButton('activity',a,'name')],['Display order',a.order,editButton('activity',a,'order')]])); detail.append(card);
+    card.append(table(['Setting','Value',''],[['Name',a.name,editButton('activity',a,'name')],['Display order',a.order,editButton('activity',a,'order')]])); detail.append(card);
     const roles = panel('Power order & inputs','Configured order is not a measured execution trace. Harmony can skip devices already on; CEC and automations can act independently.');
     const orderCell = (r,key,label) => { const cell = e('div'); cell.append(e('div',display(r[key]),'value'),editButton('activity',a,key,`${deviceName(r.deviceId)} ${label}`,r.index)); return cell; };
     roles.append(table(['Device / role','Selected input','On order','Off order','Next delay (ms)'],[...a.roles].sort((x,y)=>(x.powerOnOrder ?? 9999)-(y.powerOnOrder ?? 9999)).map(r => { const who = e('div'); who.append(e('strong',deviceName(r.deviceId)),e('div',r.type.split(':')[0],'muted')); return [who,r.input,orderCell(r,'powerOnOrder','power-on order'),orderCell(r,'powerOffOrder','power-off order'),orderCell(r,'nextDeviceDelay','next-device delay',60000)]; })));
@@ -269,7 +269,7 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
     if (!data.drafts.length) { content.append(note('No changes drafted yet. Open a device or activity and choose Edit draft.')); return; }
     for (const d of data.drafts) {
       const card = panel(), head = e('div',undefined,'panel-head'), title = e('div'); title.append(titleRow('h2',`${d.name} · ${d.label}`,helpText['Change record'])); if (d.role !== undefined) title.append(p(`Activity role ${d.role+1}`)); head.append(title,badge(statusLabels[d.status] || d.status,!['draft','hub-confirmed'].includes(d.status))); card.append(head);
-      const diff = e('div',undefined,'change-diff'); for (const [label,value] of [['At import',d.before],['Proposed',d.value]]) {const block=e('div');block.append(helpLabel(label),e('strong',formatDraftValue(d,value)));diff.append(block);} card.append(diff);
+      const diff = e('div',undefined,'change-diff'); for (const [label,value] of [['Original value',d.before],['Proposed',d.value]]) {const block=e('div');block.append(helpLabel(label),e('strong',formatDraftValue(d,value)));diff.append(block);} card.append(diff);
       if (d.before == null) card.append(note('The original value was not supplied; no default is assumed. This proposal uses the Harmony app. Verification remains pending if the hub continues to omit the setting.'));
       if (d.error) card.append(note(d.error,true));
       if (d.status === 'conflict' || d.status === 'changed-again') card.append(note('Read the hub, inspect the current value and create a new draft. An existing draft is never silently rebased.',true));
@@ -332,7 +332,7 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
       if (reportedDefault != null) block.append(p(`Reported profile default: ${reportedDefault}. This is separate from the imported value and is not selected automatically.`));
       readValue=() => {if(input.value==='')throw new Error('Choose or enter a proposed value.');return spec.type==='boolean'?input.value==='true':spec.type==='number'?Number(input.value):input.value;};
     }
-    const contents=[e('p',`Imported value: ${formatDraftValue(target,before)}`,'proposed-setting')];
+    const contents=[e('p',`Value at last hub read: ${formatDraftValue(target,before)}`,'proposed-setting')];
     if (before === null) contents.push(note('No current value was supplied. Enter the setting you want; zero or a default has not been assumed.'));
     contents.push(block,note('Saving a draft does not change Harmony. Review changes explains how to apply it and verify the result.'));
     showEditor(label,contents,'Save draft',async () => {await mutate('draft',{revision,change:{...target,version,value:readValue()}});view='changes';render();message('Change saved as a local draft.');});
