@@ -68,7 +68,7 @@ try {
   const hubMap=page.locator('details').filter({has:page.locator('summary').filter({hasText:/^Map 502$/})});
   assert.equal(await hubMap.evaluate(n=>n.open),true);await hubMap.getByText('Receiver power',{exact:true}).waitFor();await hubMap.getByText('System action: Help',{exact:true}).waitFor();
   assert.doesNotMatch(await hubMap.textContent(),/No device|Not supplied/);assert.equal(await hubMap.getByRole('columnheader',{name:'Group',exact:false}).count(),0);
-  assert.equal(await page.getByRole('button',{name:'Load IR codes',exact:true}).isDisabled(),true);
+  assert.equal(await page.getByRole('button',{name:'Load IR codes',exact:true,includeHidden:true}).isDisabled(),true);
   await page.getByText('Infrared (IR) (code 1)',{exact:true}).waitFor();
   await page.getByText('Hub + Mini blaster 1 + Mini blaster 2 (code 7)',{exact:true}).waitFor();
   const transportHelp=page.getByRole('button',{name:'Help for Control transport',exact:true});
