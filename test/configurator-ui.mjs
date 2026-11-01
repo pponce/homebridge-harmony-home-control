@@ -14,10 +14,18 @@ const server=new ConfiguratorServer({directory,config:{...normalizeConfig(),adve
   cloudFactory:()=>({target:null,async login(email,password,target){assert.equal(email,'fake@example.invalid');assert.equal(password,'fake-password');this.target=target;},async apply(change,submitted){submitted();pending=change;},async sync(progress){progress('Waiting for the test hub');if(pending)imported.resources.ActivityList.Activities[0].Name=pending.value;},close(){this.target=null;}})
 });
 await server.start();
+await server.setPassword('browser-test-password');
 const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
 try {
   const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',error=>errors.push(error.message));
-  await page.goto(server.accessLink().url);await page.locator('#read').waitFor({state:'visible'});
+  await page.goto(server.origin);
+  await page.getByLabel('Configurator password',{exact:true}).fill('incorrect');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await page.getByText('Incorrect configurator password.',{exact:true}).waitFor();
+  await page.getByLabel('Configurator password',{exact:true}).fill('browser-test-password');
+  await page.getByLabel('Remember this browser for 30 days').check();
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await page.waitForFunction(()=>!document.getElementById('read').disabled);
   await page.locator('#read').click();await page.getByRole('heading',{name:'Living room display'}).waitFor();
   assert.ok(!page.url().includes('access='));assert.equal(await page.locator('#device-count').textContent(),'2');
   await page.getByRole('button',{name:'Setup Assistant',exact:true}).click();
@@ -51,6 +59,11 @@ try {
   await page.screenshot({path:join(artifacts,'ui-configurator-mobile.png'),fullPage:true});
   await page.emulateMedia({colorScheme:'dark'});await page.getByRole('button',{name:/^Devices/}).click();await page.screenshot({path:join(artifacts,'ui-configurator-dark.png'),fullPage:true});
   offline=true;await page.locator('#read').click();await page.getByText(/Last read failed:/).waitFor();assert.equal(await page.locator('#device-count').textContent(),'2');
+  await page.getByRole('button',{name:'Sign out',exact:true}).click();
+  await page.getByLabel('Configurator password',{exact:true}).waitFor();
+  await page.reload();await page.getByLabel('Configurator password',{exact:true}).waitFor();
+  await page.goto(server.accessLink().url);
+  await page.waitForFunction(()=>!document.getElementById('read').disabled);
   assert.deepEqual(errors,[]);
   console.log('Configurator browser workflow passed: import, assistant persistence, conditional advice, manual drafts, cloud review/save/sync, stale read, HTML escaping, mobile and dark mode.');
 } finally {await browser.close();await server.close();await rm(directory,{recursive:true,force:true});}

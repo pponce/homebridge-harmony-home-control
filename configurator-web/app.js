@@ -219,11 +219,39 @@
   $('export').onclick = () => {window.location.assign(`/api/export?host=${encodeURIComponent(data.host)}`);};
   for (const n of document.querySelectorAll('[data-view]')) n.onclick = () => navigate(n.dataset.view);
   window.addEventListener('beforeunload',event => {if(contextDirty){event.preventDefault();event.returnValue='';}});
+  async function startApp() {
+    await load(); $('hub').replaceChildren();
+    for(const host of data.hosts){const o=e('option',host);o.value=host;$('hub').append(o);}
+    $('hub').value=data.host;document.querySelector('nav').hidden=false;
+    $('sign-out').hidden=$('revoke-sessions').hidden=false;
+    message('');render();schedulePoll();
+  }
+  async function showLogin() {
+    clearTimeout(timer);data=null;csrf=null;contextDirty=false;
+    document.querySelector('nav').hidden=true;$('sign-out').hidden=$('revoke-sessions').hidden=true;
+    $('read').disabled=$('export').disabled=$('hub').disabled=true;
+    $('hub').replaceChildren();$('snapshot-status').textContent='Sign in to your configurator';
+    const card=panel('Welcome back','Use your configurator password. This is separate from your Logitech account.');$('content').replaceChildren(card);
+    try {
+      const auth=await api('auth');
+      if(!auth.configured){card.append(note('Set a password in Homebridge → Harmony Home Control → Settings → Direct website sign-in. You can also use Open configurator in Homebridge.'));return;}
+      if(!auth.loginAvailable){card.append(note('Use your HTTPS configurator URL to enter your password.',true));return;}
+      const form=e('form'),password=e('input');password.type='password';password.autocomplete='current-password';password.required=true;password.maxLength=256;
+      field(form,'Configurator password',password);
+      const remember=e('input');remember.type='checkbox';const label=e('label');label.append(remember,document.createTextNode('Remember this browser for 30 days'));form.append(label);
+      const submit=e('button','Sign in','primary');submit.type='submit';form.append(submit);card.append(form);
+      form.onsubmit=async event=>{event.preventDefault();submit.disabled=true;const credential=password.value;password.value='';try{({csrf}=await api('auth/login',{password:credential,remember:remember.checked}));await startApp();}catch(error){message(error.message,true);submit.disabled=false;}};
+    } catch(error){message(error.message,true);}
+  }
+  async function signOut(all=false) {
+    if(!unsaved() || (all && !window.confirm('Sign out every configurator browser?'))) return;
+    try {await api(all?'auth/revoke':'auth/logout',{});await showLogin();message('Signed out.');}
+    catch(error){if(error.status===401)await showLogin();else message(error.message,true);}
+  }
+  $('sign-out').onclick=()=>signOut();$('revoke-sessions').onclick=()=>signOut(true);
   (async () => {
     const access = new URLSearchParams(location.hash.slice(1)).get('access'); if(access) history.replaceState(null,'',location.pathname);
-    try {
-      ({csrf} = access ? await api('session',{access}) : await api('session'));
-      await load(); $('hub').replaceChildren(); for(const host of data.hosts){const o=e('option',host);o.value=host;$('hub').append(o);}$('hub').value=data.host;render();schedulePoll();
-    } catch(error) {$('snapshot-status').textContent='Session unavailable';message(error.message,true);}
+    try {({csrf}=access ? await api('session',{access}) : await api('session'));await startApp();}
+    catch(error){await showLogin();if(error.status!==401)message(error.message,true);}
   })();
 })();

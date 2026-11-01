@@ -461,6 +461,20 @@
       $('add-real-hue').onclick = () => editRealBridge();
       $('add-hue').onclick = () => edit('hue').catch(error => notice(errorText(error),true)); $('add-roku').onclick = () => edit('roku').catch(error => notice(errorText(error),true));
       $('refresh-status').onclick = refreshStatus;
+      $('set-configurator-password').onclick = async () => {
+        const password = $('configurator-password').value;
+        if(password.length<12 || password.length>256 || password!==$('configurator-password-confirm').value) { $('configurator-auth-status').textContent='Enter matching passwords of 12–256 characters.'; return; }
+        $('configurator-password').value=''; $('configurator-password-confirm').value='';
+        $('set-configurator-password').disabled=true;
+        try {await homebridge.request('/configurator/password',{password});$('configurator-auth-status').textContent='Password set. Open your configurator URL directly and sign in. Previous sessions were revoked.';}
+        catch(error) {$('configurator-auth-status').textContent=errorText(error);}
+        finally {$('set-configurator-password').disabled=false;}
+      };
+      $('revoke-configurator-sessions').onclick = async () => {
+        if(!window.confirm('Sign out every configurator browser?')) return;
+        try {await homebridge.request('/configurator/revoke');$('configurator-auth-status').textContent='All configurator browsers signed out.';}
+        catch(error) {$('configurator-auth-status').textContent=errorText(error);}
+      };
       $('open-configurator').onclick = async () => {
         const opened = window.open('about:blank','_blank'); if (opened) opened.opener = null;
         try {

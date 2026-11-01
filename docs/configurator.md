@@ -12,7 +12,7 @@ The optional configurator runs in the plugin’s Homebridge process. With this p
 4. Save settings and restart the child bridge. Return to the plugin settings and choose **Open configurator**.
 5. Choose **Read hub**. Rooting and Logitech login are not required for local inspection.
 
-The access link is single-use and expires after two minutes. The browser session lasts up to 12 hours and ends when the child bridge restarts. Reopen it from Homebridge settings when needed. Keep the listener on your trusted home network; it is not designed for public port forwarding.
+The access link is single-use and expires after two minutes. The browser session lasts up to 12 hours and ends when the child bridge restarts. Reopen it from Homebridge settings when needed. For direct URL access, set a separate password as described below. Keep the listener on your trusted home network; it is not designed for public port forwarding.
 
 If the hub cannot be read, check its saved IPv4 address and TCP port 8088. Firmware may restrict the local interface or omit resources. An unsuccessful refresh keeps the previous import and visibly marks the failed read; it never replaces your data with an empty setup.
 
@@ -77,3 +77,13 @@ Set **Configurator public URL (HTTPS reverse proxy)** to the HTTPS origin, for e
 This mode supports a proxy on the same machine. Nginx must connect to `http://127.0.0.1:18081`, preserve `Host` and `Origin`, and overwrite `X-Forwarded-Proto` with `$scheme`. Use your actual configurator port if different. Public-host requests from non-loopback peers or without `X-Forwarded-Proto: https` are rejected. Arbitrary forwarded host headers are not trusted. Public URLs cannot contain paths, credentials, queries or fragments.
 
 Nginx handles the browser certificate; leave the plugin's certificate paths empty. Sessions through the public URL use Secure cookies and retain the same origin/CSRF protections. Configure IPv4 and IPv6 listeners when DNS publishes both address families. Direct LAN access remains available, but its browser session is separate from the public hostname session.
+
+## Direct website sign-in
+
+After enabling the configurator and restarting the child bridge, open **Direct website sign-in** in the Homebridge plugin settings. Enter and confirm a separate password of 12–256 characters and choose **Set password**. This takes effect immediately; no bridge restart is needed. Use your HTTPS configurator URL directly and sign in.
+
+Select **Remember this browser for 30 days** to keep access across browser and child-bridge restarts. Without it, access lasts up to 12 hours and ends when the child bridge restarts; the cookie also expires with the browser session. Remembered sessions expire 30 days after sign-in, without extending on use. Logitech sign-in remains separate and is never remembered across bridge restarts.
+
+Use **Sign out** for this browser or **Sign out all browsers** to revoke every configurator session. Homebridge settings also provide session revocation and password replacement if you forget the password. Replacing the password revokes existing sessions and access links.
+
+Only a salted password hash and hashes of remembered session tokens are stored in the private `configurator-auth.json` file alongside plugin state. They are excluded from configuration exports and Homebridge settings. Password entry requires HTTPS or a localhost connection, including an SSH tunnel. Repeated sign-in attempts are limited to ten per minute across the configurator.

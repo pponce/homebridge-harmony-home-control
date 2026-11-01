@@ -48,13 +48,15 @@ export class UiServer extends HomebridgePluginUiServer {
       try { return await this.runtime('/pair','POST'); } catch (error) { throw new Error(safeMessage(error)); }
     });
     this.onRequest('/configurator/open', () => this.runtime('/configurator/open','POST'));
+    this.onRequest('/configurator/password', payload => this.runtime('/configurator/password','POST',{password:payload?.password}));
+    this.onRequest('/configurator/revoke', () => this.runtime('/configurator/revoke','POST'));
     process.on('SIGTERM', () => { this.access?.close(); process.exit(0); });
     this.ready();
   }
-  async runtime(path, method = 'GET') {
+  async runtime(path, method = 'GET', payload) {
     const connection = JSON.parse(await readFile(join(this.homebridgeStoragePath, STORAGE, 'runtime.json'),'utf8'));
     if (!Number.isInteger(connection.port) || connection.port < 1 || connection.port > 65535 || !/^[a-f0-9]{64}$/.test(connection.token)) throw new Error('Invalid runtime connection. Restart the plugin.');
-    const response = await fetch(`http://127.0.0.1:${connection.port}${path}`, { method, redirect: 'error', headers: { Authorization: `Bearer ${connection.token}` }, signal: AbortSignal.timeout(3000) });
+    const response = await fetch(`http://127.0.0.1:${connection.port}${path}`, { method, redirect: 'error', headers: { Authorization: `Bearer ${connection.token}`, 'Content-Type':'application/json' }, body: payload ? JSON.stringify(payload) : undefined, signal: AbortSignal.timeout(3000) });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'The plugin is unavailable.');
     return result;
