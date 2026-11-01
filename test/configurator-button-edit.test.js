@@ -51,11 +51,11 @@ test('adding a physical button requires its remote catalog, preserves the map an
 
 test('system assignments accept only names reported for the same remote button and gesture',()=>{
   const {doc,map,s,base}=fixture();
-  const xml=buttonXml().replace(/<u:ButtonAction\b[\s\S]*?<\/u:ButtonAction>/,'<u:ButtonAction i:type="u:ButtonClientAction"><u:EventType>0</u:EventType><u:Id>0</u:Id><u:Order>0</u:Order><u:ActionName>Help</u:ActionName></u:ButtonAction>');
+  const xml=buttonXml().replace(/<u:ButtonAction\b[\s\S]*?<\/u:ButtonAction>/,'<u:ButtonAction i:type="u:ButtonClientAction"><u:EventType>7</u:EventType><u:Id>0</u:Id><u:Order>0</u:Order><u:ActionName>Help</u:ActionName><z:CatalogMetadata>retain</z:CatalogMetadata></u:ButtonAction>');
   const canvas=canvasDocuments(xml),catalog={ownerKind:'activity',ownerId:'401',remoteId:'800',skinId:'104',buttons:canvas.map(d=>d.button)},input={...base,value:{kind:'system',name:'Help'}};
   assert.throws(()=>buttonDraft(input,s,[map]),/remote catalog/);
   const change=buttonDraft(input,s,[map],catalog),out=buttonPatch(doc.raw,change,[],canvas);
-  assert.deepEqual(buttonValue(out,change),change.value);
+  assert.deepEqual(buttonValue(out,change),change.value);assert.match(out,/<u:EventType>7/);assert.match(out,/<z:CatalogMetadata>retain/);
   assert.throws(()=>buttonPatch(doc.raw,change,[],[]),/remote catalog/);
   assert.throws(()=>buttonDraft({...input,value:{kind:'system',name:'UnverifiedAction'}},s,[map],catalog),/remote catalog/);
   assert.throws(()=>buttonDraft({...input,field:'double'},s,[map],catalog),/remote catalog/);
