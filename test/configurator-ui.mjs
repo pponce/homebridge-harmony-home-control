@@ -9,6 +9,8 @@ import { nativeFixture } from './configurator-fixtures.js';
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const artifacts=join(process.cwd(),'local-work','artifacts');await mkdir(artifacts,{recursive:true});
 const directory=await mkdtemp(join(artifacts,'configurator-ui-')), imported=nativeFixture();let offline=false,pending;
+let mapLoadMode='success',irLoadMode='success',releaseRead,readStarted;
+imported.resources.MapList.ButtonMaps.push({'Id-':502,'DeviceId-':101,Buttons:[{TextOnRemote:'Receiver power',ButtonId:'soft-1',ButtonAction:{__type:'ButtonCommandAction',CommandName:'PowerOn',DeviceId:{Value:101}}},{ButtonId:'help',ButtonAction:{__type:'ButtonClientAction',ActionName:'Help'}}],Sequences:[]});
 const cloudButton={key:'Power',id:'button-1',type:'HardRemoteButton',label:'',group:'Power',press:{kind:'command',deviceId:'101',command:'PowerOn'},long:null,double:null};
 const server=new ConfiguratorServer({directory,config:{...normalizeConfig(),advertiseAddress:'127.0.0.1',harmonyHubAddresses:[imported.host],configuratorPort:0},
   reader:{read:async()=>{if(offline)throw new ConfiguratorError('The test hub is offline.',502);return structuredClone(imported);},close(){}},
@@ -24,7 +26,7 @@ const server=new ConfiguratorServer({directory,config:{...normalizeConfig(),adve
     else if(pending.field==='delays.powerOn') imported.resources.DeviceList.DevicesWithFeatures[0].DeviceFeatures[0].PowerOnDelay=pending.value;
     else if(pending.field==='inputCommands') imported.resources.DeviceList.DevicesWithFeatures[0].DeviceFeatures[1].Inputs.find(i=>i.InputName===pending.inputName).Actions=pending.value.map((a,i)=>a.kind==='command'?{__type:'IRPressAction',IRCommandName:a.command,Duration:a.duration,Order:i+1}:{__type:'IRDelayAction',Delay:a.delay,Order:i+1});
     pending=null;
-  },async buttonMaps(owner){return [{ownerKind:owner.kind,ownerId:owner.id,target:{remoteId:'800',skinId:'104',surfaceId:'7',mapId:'501',identifier:''},buttons:[structuredClone(cloudButton)]}];},async infraredCodes(){return [{name:'PowerOn',raw:'0000 006D 0002',protocolId:'9',transport:'1'},{name:'PowerOff',raw:null,protocolId:'9',transport:'1'}];},close(){this.target=null;}})
+  },async buttonMaps(owner){if(mapLoadMode==='error')throw new ConfiguratorError('Logitech rejected GetButtonMaps. The requested data could not be loaded.',502);if(mapLoadMode==='empty')return [];return [{ownerKind:owner.kind,ownerId:owner.id,target:{remoteId:'800',skinId:'104',surfaceId:'7',mapId:'501',identifier:''},buttons:[structuredClone(cloudButton)]}];},async infraredCodes(){if(irLoadMode==='delay')await new Promise(resolve=>{releaseRead=resolve;readStarted();});if(irLoadMode==='empty')return [];return [{name:'PowerOn',raw:'0000 006D 0002',protocolId:'9',transport:'1'},{name:'PowerOff',raw:null,protocolId:'9',transport:'1'}];},close(){this.target=null;}})
 });
 await server.start();
 await server.setPassword('browser-test-password','testuser');
@@ -47,6 +49,10 @@ try {
   await page.waitForFunction(()=>!document.getElementById('read').disabled);
   await page.locator('#read').click();await page.getByRole('heading',{name:'Living room display'}).waitFor();
   assert.ok(!page.url().includes('access='));assert.equal(await page.locator('#device-count').textContent(),'2');
+  const hubMap=page.locator('details').filter({has:page.locator('summary').filter({hasText:/^Map 502$/})});
+  assert.equal(await hubMap.evaluate(n=>n.open),true);await hubMap.getByText('Receiver power',{exact:true}).waitFor();await hubMap.getByText('System action: Help',{exact:true}).waitFor();
+  assert.doesNotMatch(await hubMap.textContent(),/No device|Not supplied/);assert.equal(await hubMap.getByRole('columnheader',{name:'Group',exact:false}).count(),0);
+  assert.equal(await page.getByRole('button',{name:'Load IR codes',exact:true}).isDisabled(),true);
   await page.getByText('Infrared (IR) (code 1)',{exact:true}).waitFor();
   await page.getByText('Hub + Mini blaster 1 + Mini blaster 2 (code 7)',{exact:true}).waitFor();
   const transportHelp=page.getByRole('button',{name:'Help for Control transport',exact:true});
@@ -194,8 +200,13 @@ try {
   await page.getByRole('button',{name:/^Activities/}).click();
   await page.getByRole('button',{name:'Edit Living room display selected input for Play <game>',exact:true}).click();
   await page.getByLabel('Selected input',{exact:true}).selectOption('HDMI 2');await page.getByRole('button',{name:'Save draft',exact:true}).click();
-  await page.getByRole('button',{name:/^Activities/}).click();await page.getByRole('button',{name:'Load cloud button maps',exact:true}).click();
-  await page.locator('summary').filter({hasText:'Remote surface 7'}).click();
+  await page.getByRole('button',{name:/^Activities/}).click();mapLoadMode='error';await page.getByRole('button',{name:'Load cloud button maps',exact:true}).click();
+  const mapError=page.locator('.cloud-read-status').filter({hasText:'Logitech rejected GetButtonMaps'});await mapError.waitFor();
+  assert.ok(await mapError.evaluate(n=>{const r=n.getBoundingClientRect();return r.top>=0 && r.bottom<=innerHeight;}));
+  assert.equal(await page.getByRole('button',{name:'Load cloud button maps',exact:true}).isEnabled(),true);
+  mapLoadMode='empty';await page.getByRole('button',{name:'Load cloud button maps',exact:true}).click();await page.getByText('Logitech supplied no editable maps for this device or activity. Use Harmony button customization.',{exact:true}).waitFor();
+  mapLoadMode='success';await page.getByRole('button',{name:'Load cloud button maps',exact:true}).click();
+  await page.getByRole('button',{name:'Edit Power short press',exact:true}).waitFor();
   await page.getByRole('button',{name:'Edit Power short press',exact:true}).click();await page.getByLabel('Command',{exact:true}).selectOption('PowerOff');
   await page.getByRole('button',{name:'Save draft',exact:true}).click();
   const buttonChange=page.locator('section.panel').filter({has:page.getByRole('heading',{name:'Play <game> · Power · Short press',exact:true})});
@@ -203,11 +214,22 @@ try {
   await page.getByRole('button',{name:'Compile & sync this hub',exact:true}).click();await buttonChange.getByText('Synced · check the remote',{exact:true}).waitFor({timeout:12000});
   await buttonChange.getByRole('button',{name:'I verified this on the remote',exact:true}).click();await buttonChange.getByText('Confirmed on remote',{exact:true}).waitFor();
   await page.waitForFunction(()=>!document.getElementById('read').disabled);
-  await page.getByRole('button',{name:/^Devices/}).click();await page.getByRole('button',{name:'Load IR codes',exact:true}).click();
+  await page.getByRole('button',{name:/^Devices/}).click();irLoadMode='empty';await page.getByRole('button',{name:'Load IR codes',exact:true}).click();
+  await page.getByText('Logitech returned no commands for this device.',{exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Export this device’s IR codes',exact:true}).count(),0);
+  irLoadMode='delay';const started=new Promise(resolve=>{readStarted=resolve;});await page.getByRole('button',{name:'Load IR codes',exact:true}).click();await page.getByText('Loading from Logitech…',{exact:true}).waitFor();await started;
+  assert.equal(await page.getByRole('button',{name:'Loading…',exact:true}).isDisabled(),true);releaseRead();irLoadMode='success';
   await page.getByText('1 of 2 commands include a Raw payload.',{exact:true}).waitFor();
+  assert.equal(await page.getByLabel('Harmony Raw payload for PowerOn',{exact:true}).isVisible(),true);
   const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Export this device’s IR codes',exact:true}).click();const download=await downloadPromise;
   assert.equal(download.suggestedFilename(),'harmony-ir-101.json');const exported=JSON.parse(await readFile(await download.path(),'utf8'));assert.equal(exported.commands[0].raw,'0000 006D 0002');assert.equal(exported.commands.length,1);
   await page.screenshot({path:join(artifacts,'ui-configurator-ir-codes.png'),fullPage:true});
+  await page.route('**/api/ir-codes',route=>route.fulfill({status:502,contentType:'text/html',body:'<html>Upstream failed: private-proxy-details</html>'}));
+  await page.getByRole('button',{name:'Load IR codes',exact:true}).click();
+  await page.locator('.cloud-read-status').filter({hasText:'unreadable response (HTTP 502)'}).waitFor();
+  assert.match(await page.locator('.cloud-read-status').filter({hasText:'HTTP 502'}).textContent(),/Showing the previously loaded data/);
+  assert.doesNotMatch(await page.locator('#content').textContent(),/private-proxy-details/);
+  await page.unroute('**/api/ir-codes');
   await page.reload();await page.getByRole('heading',{name:'Living room display'}).waitFor();
   await page.getByRole('button',{name:'Setup Assistant',exact:true}).click();assert.equal(await page.getByLabel('Device type',{exact:true}).nth(1).inputValue(),'switch');
   assert.equal(await sleepMethods.getByRole('checkbox',{name:'HDMI-CEC',exact:true}).isChecked(),true);

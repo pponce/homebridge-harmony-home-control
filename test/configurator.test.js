@@ -15,6 +15,16 @@ import { listen,closeServer } from '../lib/http.js';
 import { nativeFixture,modelFixture } from './configurator-fixtures.js';
 import { deviceFields, draftValue, connectionsFor, methodsFor, inputMethodLabel } from '../configurator-web/settings.js';
 
+test('button projection includes touchscreen labels, IDs, nested device IDs and system action names without private fields',()=>{
+  const snapshot=nativeFixture();snapshot.resources.MapList.ButtonMaps[0].Buttons=[
+    {ButtonId:123,TextOnRemote:'Receiver power',Raw:'secret-ir',ButtonAction:{__type:'ButtonCommandAction',CommandName:'PowerOn',DeviceId:{Value:101},Secret:'private-token'}},
+    {ButtonId:'help',ButtonAction:{__type:'ButtonClientAction',ActionName:'Help'}}
+  ];
+  const buttons=project(snapshot).maps[0].buttons;
+  assert.equal(buttons[0].label,'Receiver power');assert.equal(buttons[0].id,'123');assert.equal(buttons[0].action.deviceId,'101');
+  assert.equal(buttons[1].action.name,'Help');assert.equal(buttons[1].action.deviceId,'');assert.doesNotMatch(JSON.stringify(buttons),/secret-ir|private-token/);
+});
+
 test('device projection preserves native numeric control settings and labels only known mappings',() => {
   const snapshot=nativeFixture(), device=snapshot.resources.DeviceList.DevicesWithFeatures[0].Device;
   const projected=()=>project(snapshot).devices[0];

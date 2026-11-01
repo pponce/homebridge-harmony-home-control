@@ -4,6 +4,7 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
 (() => {
   const $ = id => document.getElementById(id);
   let data, csrf, view = 'devices', selectedDevice, selectedActivity, contextDirty = false, localBusy = false, timer, editAction;
+  const cloudReads = new Map();
   const e = (tag,text,cls) => { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (cls) node.className = cls; return node; };
   const display = value => value == null || value === '' ? 'Not supplied' : value === true ? 'Yes' : value === false ? 'No' : String(value);
   const time = value => value ? new Date(value).toLocaleString() : 'not yet read';
@@ -60,7 +61,9 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
   function heading(title,description) { const n = e('div',undefined,'page-head'), text = e('div'); text.append(titleRow('h1',title),p(description)); n.append(text,badge('Imported + your context')); return n; }
   async function api(path,payload) {
     const response = await fetch(`/api/${path}`,{method:payload ? 'POST' : 'GET',credentials:'same-origin',headers:payload ? {'Content-Type':'application/json','X-Configurator-CSRF':csrf || ''} : {},body:payload ? JSON.stringify(payload) : undefined});
-    const result = await response.json(); if (!response.ok) { const error = new Error(result.error || 'The request failed.'); error.status = response.status; throw error; } return result;
+    let result;
+    try { result = await response.json(); } catch { throw new Error(`The web server returned an unreadable response (HTTP ${response.status}). Try again; if this continues, check the web server connection.`); }
+    if (!response.ok) { const error = new Error(result.error || 'The request failed.'); error.status = response.status; throw error; } return result;
   }
   async function load() { data = await api(`state?host=${encodeURIComponent($('hub').value || '')}`); }
   async function mutate(path,payload = {}) {
@@ -142,15 +145,16 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
     inputs.append(details('Input sequence actions',moreInput)); detail.append(inputs);
     const commands = panel(`${d.commands.length} available commands`,undefined,helpText['Available commands']), chips = e('div',undefined,'chips'); d.commands.forEach(c => chips.append(e('span',c,'chip'))); commands.append(details('Show command names',chips),e('p','Command names are inspected only; this page does not send them.','muted')); detail.append(commands);
     if(isInfrared(d)) {
-      cloudReadButton(commands,'Load IR codes',async()=>{await mutate('ir-codes',{owner:{kind:'device',id:d.id}});render();});
+      cloudReadButton(commands,'Load IR codes','ir-codes',{kind:'device',id:d.id});
       commands.append(p('Logitech may supply a Raw payload for individual IR commands. Payloads are shown exactly as returned; their format may not be Pronto hex. Commands without a supplied payload cannot be exported as IR codes.'));
       if(data.cloud.codes?.deviceId===d.id) {
         const codes=data.cloud.codes.commands, supplied=codes.filter(c=>c.raw);
         commands.append(p(`${supplied.length} of ${codes.length} commands include a Raw payload.`));
-        for(const code of supplied) {const box=e('textarea');box.readOnly=true;box.value=code.raw;box.setAttribute('aria-label',`Harmony Raw payload for ${code.name}`);commands.append(details(code.name,box));}
         if(supplied.length) commands.append(button('Export this device’s IR codes',()=>{
           const url=URL.createObjectURL(new Blob([JSON.stringify({format:'harmony-raw-command-export',version:1,device:{id:d.id,name:d.name},commands:supplied},null,2)],{type:'application/json'})), a=e('a');a.href=url;a.download=`harmony-ir-${d.id}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
         }));
+        else commands.append(note(codes.length ? 'Logitech did not supply IR payloads for this device.' : 'Logitech returned no commands for this device.'));
+        for(const [index,code] of supplied.entries()) {const box=e('textarea');box.readOnly=true;box.value=code.raw;box.setAttribute('aria-label',`Harmony Raw payload for ${code.name}`);const row=details(code.name,box);row.querySelector('details').open=index===0;commands.append(row);}
         if(codes.some(c=>!c.raw)) commands.append(details('Commands without a supplied IR payload',p(codes.filter(c=>!c.raw).map(c=>c.name).join(', '))));
       }
     }
@@ -171,20 +175,42 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
     for (const [label,key] of [['Start actions','enter'],['End actions','leave']]) { const card = panel(label); card.append(actionsTable(a[key]),editButton('activity',a,key)); detail.append(card); }
     appendMaps(detail,s.maps.filter(m => m.activityId === a.id),{kind:'activity',id:a.id});
   }
-  function cloudReadButton(parent,label,run) {
+  function cloudReadButton(parent,label,path,owner) {
     const ready=data.cloud.saved || data.cloud.connected && data.cloud.host===data.host;
-    const b=button(label,run);b.disabled=!ready || !data.cloud.loginAvailable || data.busy;parent.append(b);
+    const key=JSON.stringify([data.host,path,owner.kind,owner.id]), state=cloudReads.get(key), status=e('p',undefined,'cloud-read-status');
+    status.dataset.cloudRead=key;status.tabIndex=-1;status.setAttribute('role',state?.error ? 'alert' : 'status');
+    const loaded=path==='ir-codes' ? data.cloud.codes?.deviceId===owner.id : data.cloud.mapOwner?.kind===owner.kind && data.cloud.mapOwner.id===owner.id;
+    status.textContent=state?.error ? `${state.error}${loaded ? ' Showing the previously loaded data.' : ''}` : state?.loading ? 'Loading from Logitech…' : loaded ? 'Loaded from Logitech.' : !data.cloud.loginAvailable ? 'Open this page over HTTPS or through localhost to load Logitech data.' : !ready ? 'Save your Logitech login in Review changes to load this data.' : data.busy || localBusy ? 'Wait for the current operation to finish.' : '';
+    status.hidden=!status.textContent;if(state?.error) status.classList.add('error');
+    const b=e('button',state?.loading ? 'Loading…' : label);b.type='button';
+    b.disabled=!ready || !data.cloud.loginAvailable || data.busy || localBusy;
+    b.onclick=async()=>{
+      if(localBusy || data.busy) return;
+      const startHost=data.host,startView=view;
+      cloudReads.set(key,{loading:true});b.disabled=true;b.textContent='Loading…';parent.setAttribute('aria-busy','true');
+      status.classList.remove('error');status.setAttribute('role','status');status.hidden=false;status.textContent='Loading from Logitech…';
+      try {await mutate(path,{owner});cloudReads.delete(key);}
+      catch(error){cloudReads.set(key,{error:error.message});}
+      finally {
+        parent.removeAttribute('aria-busy');
+        if(data.host===startHost && view===startView && (owner.kind==='device'?selectedDevice:selectedActivity)===owner.id && !contextDirty && !$('editor').open) {
+          render();const result=[...document.querySelectorAll('[data-cloud-read]')].find(n=>n.dataset.cloudRead===key);
+          result?.focus({preventScroll:true});result?.scrollIntoView({block:'nearest'});
+        }
+      }
+    };
+    parent.append(b,status);
     if(!ready) parent.append(button('Logitech login',()=>navigate('changes')));
   }
   function appendMaps(parent,maps,owner) {
     const card = panel('Button maps');
-    cloudReadButton(card,'Load cloud button maps',async()=>{await mutate('button-maps',{owner});render();});
+    cloudReadButton(card,'Load cloud button maps','button-maps',owner);
     card.append(p('Load the remote’s maps from Logitech to edit existing button assignments. Each save changes one gesture on one button.'));
     const loaded=data.cloud.mapOwner?.kind===owner.kind && data.cloud.mapOwner.id===owner.id;
     if(loaded) {
       const cloudMaps=data.cloud.maps;
       if(!cloudMaps.length) card.append(note('Logitech supplied no editable maps for this device or activity. Use Harmony button customization.'));
-      for(const map of cloudMaps) {
+      for(const [index,map] of cloudMaps.entries()) {
         const block=e('div');
         block.append(table(['Button','Gesture','Assignment',''],map.buttons.flatMap(b=>Object.entries({press:'Short press',long:'Long press',double:'Double press'}).map(([gesture,label])=> {
           const action=b[gesture], name=b.label || b.key || b.id || 'Unidentified button';
@@ -193,12 +219,21 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
           if(editable) edit.setAttribute('aria-label',`Edit ${name} ${label.toLowerCase()}`);
           return [name,label,formatDraftValue({kind:'button'},action),edit];
         }))));
-        card.append(details(`Remote surface ${map.target.surfaceId}${map.target.mapId ? ` · map ${map.target.mapId}` : ''}`,block,helpText['Button map']));
+        const surface=details(`Remote surface ${map.target.surfaceId}${map.target.mapId ? ` · map ${map.target.mapId}` : ''}`,block,helpText['Button map']);surface.querySelector('details').open=index===0;card.append(surface);
       }
       card.append(p('To add buttons, change touchscreen layout, or edit named sequences and system actions, use Harmony button customization. Gesture support depends on the remote.'));
     } else {
       if (!maps.length) card.append(p('No matching button map was supplied by the hub.'));
-      for (const m of maps) { const block = e('div'); block.append(table(['Button','Group','Action'],m.buttons.map(b => [b.key,b.group,`${b.action.command || b.action.type} · ${deviceName(b.action.deviceId)}`]))); for (const s of m.sequences) block.append(titleRow('h3',s.name,helpText['Button sequence']),actionsTable(s.actions)); card.append(details(m.id ? `Map ${m.id}` : 'Hub button assignments',block,helpText['Button map'])); }
+      if(maps.length) card.append(p('Assignments from the most recent Read hub.'));
+      for (const m of maps) {
+        const block=e('div'), hasGroups=m.buttons.some(b=>b.group);
+        block.append(table(['Button',...(hasGroups?['Group']:[]),'Action'],m.buttons.map(b=>{
+          const a=b.action,type=a.type.split(':')[0],action=type==='ButtonClientAction' ? `System action: ${a.name || 'Name not supplied'}` : `${a.command || a.name || (a.channel ? `Channel ${a.channel}` : type || 'No assignment')}${a.deviceId ? ` · ${deviceName(a.deviceId)}` : ''}`;
+          return [b.label || b.key || (b.id ? `Button ${b.id}` : 'Unnamed button'),...(hasGroups?[b.group || '—']:[]),action];
+        })));
+        for(const s of m.sequences) block.append(titleRow('h3',s.name,helpText['Button sequence']),actionsTable(s.actions));
+        const assignments=details(m.id ? `Map ${m.id}` : 'Hub button assignments',block,helpText['Button map']);assignments.querySelector('details').open=true;card.append(assignments);
+      }
     }
     parent.append(card);
   }
