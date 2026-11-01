@@ -80,7 +80,7 @@ try {
   await page.getByRole('button',{name:'Edit Power command type for Living room display',exact:true}).click();
   await page.getByLabel('Proposed value',{exact:true}).selectOption('3');
   await page.getByRole('button',{name:'Save draft',exact:true}).click();
-  await page.getByText('Manual / no automatic power commands',{exact:true}).waitFor();
+  await page.locator('#content').getByText('Manual / no automatic power commands',{exact:true}).waitFor();
   await page.getByRole('button',{name:/^Devices/}).click();
   await page.getByRole('button',{name:'Edit Input order for Living room display',exact:true}).click();
   await page.getByRole('button',{name:'Move up: HDMI 2',exact:true}).click();
