@@ -1,6 +1,6 @@
 {
   "name": "homebridge-harmony-home-control",
-  "version": "0.1.0-alpha.17",
+  "version": "0.1.0-alpha.18",
   "description": "Control Hue lights and existing Homebridge accessories with a Logitech Harmony remote using one combined bridge.",
   "type": "module",
   "main": "index.js",

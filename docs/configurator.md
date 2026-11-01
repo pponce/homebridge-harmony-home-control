@@ -60,11 +60,13 @@ Under **Button maps**, choose **Load cloud button maps** after saving a Logitech
 
 **Edit touchscreen labels & order** appears when the surface supplies identified touchscreen buttons with unique menu positions. Change labels or move existing buttons within their menu. Icons and assignments are preserved. After saving and syncing a button or screen change, check the remote and choose **I verified this on the remote** in the change record.
 
-For an infrared device, **Load IR codes** retrieves its command data from Logitech. Each command can include a **Harmony keycode**, **Raw data**, a protocol ID, transport type and learned status. The first command with code data opens automatically. **Command details** lists every returned command and shows which representations were supplied or could not be read. Use **Export command data (JSON)** beside the result count to download all returned commands, including entries without code data.
+For an infrared device, expand **IR codes** under **Available commands**, then choose **Load IR codes**. This retrieves and saves its command data from Logitech. Saved data is available across logins and child-bridge restarts; **Refresh IR codes** updates it on demand and shows the time of the last successful reading. A failed refresh keeps the saved copy. Data is saved separately for each hub and device; a changed account, remote or device profile requires a new reading.
+
+The entire **IR codes** section can be collapsed, including its controls and results. Each command can include a **Harmony keycode**, **Raw data**, a protocol ID, transport type and learned status. Values appear as compact, selectable text that wraps to fit the screen. The first command with code data opens automatically. **Command details** lists every returned command and shows which representations were supplied or could not be read. Use **Export command data (JSON)** beside the result count to download all returned commands, including entries without code data.
 
 Expand a command to see its keycode’s data values in **Hexadecimal** and **Binary**. Each value is labeled by its Start, Repeat or Finish sequence and protocol segment. Leading zeros are preserved, with four binary digits per hexadecimal digit. For example, `A156F609` appears as `A1 56 F6 09` and `10100001 01010110 11110110 00001001`. These views show the values written in the keycode; the protocol definition determines how they become a transmitted signal.
 
-Harmony keycodes use Logitech’s encoding; rendering them as IR waveforms requires the matching protocol definition. Raw data is preserved in its supplied format. The viewer does not convert either representation to Pronto hex or transmit commands. Command data is held for the current session and excluded from the general review export.
+Harmony keycodes use Logitech’s encoding; rendering them as IR waveforms requires the matching protocol definition. Raw data is preserved in its supplied format. The viewer does not convert either representation to Pronto hex or transmit commands. Saved command data is excluded from the general review export.
 
 Both load controls show progress, empty results and errors beside the button. A Logitech rejection identifies the failed request and includes a numeric fault code when available. If a reload fails, any previously loaded data stays visible and is labeled accordingly.
 
@@ -116,7 +118,7 @@ If a save is interrupted after submission, it is marked **Cloud save unconfirmed
 
 ## Local data and export
 
-The current projected hub import, setup answers and draft records are stored in `harmony-home-control/configurator.json` under Homebridge’s storage directory, with private file permissions. This current working state is separate from the emulator’s identity and real Hue credentials. It is not a full hub backup.
+The current projected hub import, setup answers, draft records and saved IR command data are stored in `harmony-home-control/configurator.json` under Homebridge’s storage directory, with private file permissions. This current working state is separate from the emulator’s identity and real Hue credentials. It is not a full hub backup.
 
 **Export review** downloads the projected configuration, answers and changes for discussion or troubleshooting. It excludes Logitech credentials, account/remote IDs and raw IR data. Device names, the hub’s IP address and your free-text automation notes are included; review those before sharing.
 

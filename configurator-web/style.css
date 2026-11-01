@@ -46,6 +46,12 @@ button.field-help-button:focus-visible{outline:2px solid var(--accent)}
 
 .sequence-row{min-width:0;margin:12px 0;padding:14px;border:1px solid var(--line);border-radius:10px}
 .sequence-row legend{padding:0 5px;font-weight:600;font-size:13px}
-.code-value{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;min-height:70px}
+.ir-data{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 12px;margin:10px 0;font-size:12px}
+.ir-data dt{font-weight:600}.ir-data dd{margin:0;min-width:0}
+.ir-value{display:block;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;max-height:9em;overflow:auto;user-select:all;outline-offset:3px}
+.ir-payload{margin:10px 0}.ir-payload>p{font-size:11px;margin:0}
+.ir-metadata{display:flex;flex-wrap:wrap;gap:6px 18px;margin:10px 0;font-size:11px;color:var(--muted)}
+.ir-metadata>div{display:flex;align-items:baseline;gap:6px}.ir-metadata dd{margin:0;color:var(--ink)}
+@media(max-width:480px){.ir-data{grid-template-columns:minmax(0,1fr);gap:3px}.ir-data dd{margin-bottom:7px}}
 .cloud-form{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 @media(max-width:760px){.cloud-form{grid-template-columns:1fr}}

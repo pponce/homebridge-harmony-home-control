@@ -196,7 +196,7 @@ test('cloud map drafts require a bound session catalog; IR payloads and map iden
   const drafted=await f.call('draft',{change});assert.equal(drafted.status,200);const key=drafted.result.drafts[0].key;
   await f.call('ir-codes',{owner:{kind:'device',id:'101'}});
   const exported=(await f.call('export')).result;assert.ok(!JSON.stringify(exported).includes('test-ir-payload'));assert.equal(exported.drafts[0].mapTarget,undefined);
-  assert.ok(!String(await readFile(join(f.directory,'configurator.json'))).includes('test-ir-payload'));
+  assert.ok(String(await readFile(join(f.directory,'configurator.json'))).includes('test-ir-payload'));
   assert.equal((await f.call('apply',{key,confirm:true})).status,409);assert.equal(writes,0);
   const review=(await f.call('preview',{key})).result.cloud.review;assert.equal((await f.call('apply',{key,confirm:true,reviewToken:review.token})).status,200);assert.equal(writes,1);
   await f.call('refresh',{});assert.equal((await f.call('state')).result.drafts[0].status,'cloud-saved');
@@ -204,6 +204,52 @@ test('cloud map drafts require a bound session catalog; IR payloads and map iden
   assert.equal((await f.call('state')).result.drafts[0].status,'remote-check');
   assert.equal((await f.call('remote-verified',{key,confirm:true})).result.drafts[0].status,'remote-confirmed');
   f.imported.accountId='901';await f.call('refresh',{});assert.deepEqual((await f.call('state')).result.cloud.maps,[]);
+});
+
+async function openSavedIrSession(server) {
+  const origin=`http://127.0.0.1:${server.port}`,access=new URL(server.accessLink().url).hash.slice(8);
+  const opened=await fetch(`${origin}/api/session`,{method:'POST',headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify({access})});
+  const cookie=opened.headers.get('set-cookie').split(';')[0];
+  return (await fetch(`${origin}/api/state`,{headers:{Cookie:cookie}})).json();
+}
+test('saved IR codes retain multiple devices across logout and restart without connecting to Logitech',async t=>{
+  const f=await serverFixture(t);let loads=0,logins=0;
+  f.imported.resources.DeviceList.DevicesWithFeatures[1].Device.Transport=1;
+  f.server.cloudFactory=()=>({target:null,async login(e,p,target){logins++;this.target=target;},close(){},async infraredCodes(id){loads++;return [{name:`Command ${id}`,keyCode:'G:Toshiba 32 Bit:(0xA156F609)(Repeat)():3',raw:null,Secret:'private-vendor-field'}];}});
+  await f.call('refresh',{});await f.call('login',{email:'ir@example.invalid',password:'ir-test-password'});
+  await f.call('ir-codes',{owner:{kind:'device',id:'101'}});const loaded=await f.call('ir-codes',{owner:{kind:'device',id:'102'}});
+  assert.deepEqual(Object.keys(loaded.result.cloud.codes),['101','102']);assert.equal(loads,2);assert.equal(logins,1);
+  const file=join(f.directory,'configurator.json'),stored=await readFile(file,'utf8');assert.equal((await stat(file)).mode & 0o777,0o600);assert.doesNotMatch(stored,/private-vendor-field|ir-test-password|ir@example/);
+  assert.equal(loaded.result.cloud.codes['101'].identity,undefined);assert.equal(loaded.result.cloud.codes['101'].profile,undefined);assert.ok(Number.isFinite(Date.parse(loaded.result.cloud.codes['101'].updatedAt)));
+  assert.doesNotMatch(JSON.stringify((await f.call('export')).result),/A156F609|Command 101/);
+  await f.call('auth/logout',{});assert.equal((await f.call('state')).status,401);
+  const fresh=await openSavedIrSession(f.server);assert.deepEqual(fresh.cloud.codes,loaded.result.cloud.codes);assert.equal(fresh.cloud.connected,false);assert.equal(loads,2);assert.equal(logins,1);
+  await f.server.close();
+  const restarted=new ConfiguratorServer({directory:f.directory,config:f.server.config,reader:{async read(){return f.imported;},close(){}},cloudFactory(){throw new Error('Viewing saved IR codes must not connect to Logitech');}});
+  await restarted.start();t.after(()=>restarted.close());
+  const state=await openSavedIrSession(restarted);assert.deepEqual(state.cloud.codes,loaded.result.cloud.codes);assert.equal(state.cloud.saved,false);assert.equal(state.cloud.connected,false);
+});
+test('IR refresh replaces only successful results and preserves saved data on read or storage errors',async t=>{
+  const f=await serverFixture(t);let result=[{name:'PowerOn',raw:'first-code'}],error=false;
+  f.server.cloudFactory=()=>({target:null,async login(e,p,target){this.target=target;},close(){},async infraredCodes(){if(error)throw new ConfiguratorError('IR read failed',502);return result;}});
+  await f.call('refresh',{});await f.call('login',{email:'ir@example.invalid',password:'ir-test-password'});
+  const first=(await f.call('ir-codes',{owner:{kind:'device',id:'101'}})).result.cloud.codes['101'];
+  error=true;assert.equal((await f.call('ir-codes',{owner:{kind:'device',id:'101'}})).status,502);assert.deepEqual((await f.call('state')).result.cloud.codes['101'],first);
+  error=false;result={unexpected:'response'};assert.equal((await f.call('ir-codes',{owner:{kind:'device',id:'101'}})).status,502);assert.deepEqual((await f.call('state')).result.cloud.codes['101'],first);
+  result=[{name:'PowerOn',raw:'second-code'}];const originalFile=f.server.store.file;f.server.store.file=join(f.directory,'missing','state.json');
+  assert.equal((await f.call('ir-codes',{owner:{kind:'device',id:'101'}})).status,500);f.server.store.file=originalFile;assert.deepEqual((await f.call('state')).result.cloud.codes['101'],first);
+  const second=(await f.call('ir-codes',{owner:{kind:'device',id:'101'}})).result.cloud.codes['101'];assert.equal(second.commands[0].raw,'second-code');assert.ok(Date.parse(second.updatedAt)>=Date.parse(first.updatedAt));
+  result=[];const empty=await f.call('ir-codes',{owner:{kind:'device',id:'101'}});assert.equal(empty.status,200);assert.deepEqual(empty.result.cloud.codes['101'].commands,[]);
+});
+test('saved IR codes stay with their hub and are removed when the account, remote or device profile changes',async t=>{
+  const f=await serverFixture(t,{harmonyHubAddresses:['192.0.2.70','192.0.2.71']});
+  f.server.cloudFactory=()=>({target:null,async login(e,p,target){this.target=target;},close(){},async infraredCodes(){return [{name:'PowerOn',raw:'bound-code'}];}});
+  const load=async()=>{await f.call('logout',{});await f.call('login',{email:'ir@example.invalid',password:'test'});const result=await f.call('ir-codes',{owner:{kind:'device',id:'101'}});assert.equal(result.status,200);};
+  await f.call('refresh',{});await load();assert.deepEqual((await f.call('state?host=192.0.2.71')).result.cloud.codes,{});
+  f.imported.resources.DeviceList.DevicesWithFeatures[0].Device.Name='Renamed display';assert.ok((await f.call('refresh',{})).result.cloud.codes['101']);
+  for(const key of ['accountId','remoteId']) {f.imported[key]+='1';assert.deepEqual((await f.call('refresh',{})).result.cloud.codes,{});await load();}
+  f.imported.resources.DeviceList.DevicesWithFeatures[0].Device.Model='Different model';assert.deepEqual((await f.call('refresh',{})).result.cloud.codes,{});await load();
+  f.imported.resources.DeviceList.DevicesWithFeatures.shift();assert.deepEqual((await f.call('refresh',{})).result.cloud.codes,{});assert.doesNotMatch(await readFile(join(f.directory,'configurator.json'),'utf8'),/bound-code/);
 });
 test('answers and drafts survive restart; stale pages conflict and refreshed imports verify manual changes',async t => {
   const f=await serverFixture(t);const first=await f.call('refresh',{});const s=first.result.snapshot;

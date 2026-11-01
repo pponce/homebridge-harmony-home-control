@@ -5,7 +5,7 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
 (() => {
   const $ = id => document.getElementById(id);
   let data, csrf, view = 'devices', selectedDevice, selectedActivity, contextDirty = false, localBusy = false, timer, editAction;
-  const cloudReads = new Map();
+  const cloudReads = new Map(), expandedIr = new Set();
   const e = (tag,text,cls) => { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (cls) node.className = cls; return node; };
   const display = value => value == null || value === '' ? 'Not supplied' : value === true ? 'Yes' : value === false ? 'No' : String(value);
   const time = value => value ? new Date(value).toLocaleString() : 'not yet read';
@@ -145,41 +145,51 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
     for (const [key,label] of [['start','Start input selection'],['next','Next input'],['previous','Previous input'],['finish','Finish input selection']]) moreInput.append(titleRow('h3',label),actionsTable(d.inputActions[key] || []),editButton('device',d,`inputActions.${key}`));
     inputs.append(details('Input sequence actions',moreInput)); detail.append(inputs);
     const commands = panel(`${d.commands.length} available commands`,undefined,helpText['Available commands']), chips = e('div',undefined,'chips'); d.commands.forEach(c => chips.append(e('span',c,'chip'))); commands.append(details('Show command names',chips),e('p','Command names are inspected only; this page does not send them.','muted')); detail.append(commands);
-    if(isInfrared(d)) {
-      cloudReadButton(commands,'Load IR codes','ir-codes',{kind:'device',id:d.id});
-      commands.append(p('View and export the command data supplied by Logitech. Harmony keycodes use Logitech’s encoding; rendering them as IR waveforms requires the matching protocol definition.'));
-      if(data.cloud.codes?.deviceId===d.id) {
-        const codes=data.cloud.codes.commands, supplied=codes.filter(c=>c.raw || c.keyCode);
-        commands.append(p(`${supplied.length} of ${codes.length} commands include code data.`));
-        if(codes.length) commands.append(button('Export command data (JSON)',()=>{
-          const url=URL.createObjectURL(new Blob([JSON.stringify({format:'harmony-command-code-export',version:1,device:{id:d.id,name:d.name},commands:codes},null,2)],{type:'application/json'})), a=e('a');a.href=url;a.download=`harmony-command-codes-${d.id}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-        }));
-        if(!supplied.length) commands.append(note(codes.length ? 'The command list loaded, but no readable code data was returned.' : 'Logitech returned no commands for this device.'));
-        for(const [index,code] of supplied.entries()) {
-          const content=e('div');
-          for(const [key,label] of [['keyCode','Harmony keycode'],['raw','Raw data']]) if(code[key]) {const box=e('textarea');box.readOnly=true;box.value=code[key];field(content,label,box);box.setAttribute('aria-label',`${label} for ${code.name}`);}
-          if(code.keyCode) {
-            const values=keycodeData(code.keyCode);
-            if(values?.length) for(const [index,value] of values.entries()) {
-              const group=e('fieldset',undefined,'sequence-row'),label=`${value.phase} data · segment ${value.segment}`;group.append(e('legend',label));
-              for(const [key,label] of [['hex','Hexadecimal'],['binary','Binary']]) {
-                const box=e('textarea',undefined,'code-value');box.readOnly=true;box.rows=2;box.value=value[key];field(group,label,box);box.setAttribute('aria-label',`${label} for ${code.name} (${value.phase}, segment ${value.segment}, value ${index+1})`);
-              }
-              content.append(group);
-            }
-            else content.append(p(values ? 'This keycode uses named protocol segments with no hexadecimal data values.' : 'Hexadecimal and binary views are unavailable for this keycode format.'));
-          }
-          content.append(table(['Protocol ID','Transport type','Learned'],[[code.protocolId,code.transport,code.learned]]));
-          const row=details(code.name,content);row.querySelector('details').open=index===0;commands.append(row);
-        }
-        if(codes.length) {
-          const availability=c=>[c.keyCode ? 'Harmony keycode' : c.keyCodeState==='unsupported' ? 'Unsupported KeyCode format' : '',c.raw ? 'Raw data' : c.rawState==='unsupported' ? 'Unsupported Raw format' : ''].filter(Boolean).join(' · ') || 'Not supplied';
-          const overview=details('Command details',table(['Command','Code data','Protocol ID','Transport type','Learned'],codes.map(c=>[c.name,availability(c),c.protocolId,c.transport,c.learned])));overview.querySelector('details').open=!supplied.length;commands.append(overview);
-        }
-      }
-    }
+    if(isInfrared(d)) appendIrCodes(commands,d);
     appendMaps(detail,s.maps.filter(m => m.deviceId === d.id),{kind:'device',id:d.id});
     detail.append(e('p',s.coverage,'muted')); if (s.unavailable.length) detail.append(note(`Unavailable resources: ${s.unavailable.join(', ')}.`,true));
+  }
+  function irValues(rows) {
+    const list=e('dl',undefined,'ir-data');
+    for(const [label,text,name] of rows) {
+      const term=e('dt'),description=e('dd'),value=e('code',text,'ir-value');term.append(helpLabel(label));value.tabIndex=0;value.setAttribute('aria-label',name);description.append(value);list.append(term,description);
+    }
+    return list;
+  }
+  function appendIrCodes(parent,device) {
+    const content=e('div'),cached=data.cloud.codes?.[device.id];
+    cloudReadButton(content,cached ? 'Refresh IR codes' : 'Load IR codes','ir-codes',{kind:'device',id:device.id});
+    content.append(e('p','Saved IR data stays available across logins. Use the button to refresh it from Logitech.','muted'));
+    if(cached) {
+      const codes=cached.commands,supplied=codes.filter(c=>c.raw || c.keyCode);
+      content.append(p(`${supplied.length} of ${codes.length} commands include code data.`));
+      if(codes.length) content.append(button('Export command data (JSON)',()=>{
+        const url=URL.createObjectURL(new Blob([JSON.stringify({format:'harmony-command-code-export',version:1,device:{id:device.id,name:device.name},commands:codes},null,2)],{type:'application/json'})),a=e('a');a.href=url;a.download=`harmony-command-codes-${device.id}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+      }));
+      if(!supplied.length) content.append(note(codes.length ? 'The command list loaded, but no readable code data was returned.' : 'Logitech returned no commands for this device.'));
+      for(const [index,code] of supplied.entries()) {
+        const body=e('div');
+        body.append(irValues([['keyCode','Harmony keycode'],['raw','Raw data']].filter(([key])=>code[key]).map(([key,label])=>[label,code[key],`${label} for ${code.name}`])));
+        if(code.keyCode) {
+          const values=keycodeData(code.keyCode);
+          if(values?.length) for(const [index,value] of values.entries()) {
+            const group=e('div',undefined,'ir-payload');group.append(e('p',`${value.phase} data · segment ${value.segment}`,'muted'));
+            group.append(irValues([['hex','Hexadecimal'],['binary','Binary']].map(([key,label])=>[label,value[key],`${label} for ${code.name} (${value.phase}, segment ${value.segment}, value ${index+1})`])));body.append(group);
+          }
+          else body.append(p(values ? 'This keycode uses named protocol segments with no hexadecimal data values.' : 'Hexadecimal and binary views are unavailable for this keycode format.'));
+        }
+        const metadata=e('dl',undefined,'ir-metadata');
+        for(const [label,value] of [['Protocol ID',code.protocolId],['Transport type',code.transport],['Learned',code.learned]]) {const item=e('div'),term=e('dt');term.append(helpLabel(label));item.append(term,e('dd',display(value)));metadata.append(item);}
+        body.append(metadata);
+        const row=details(code.name,body);row.querySelector('details').open=index===0;content.append(row);
+      }
+      if(codes.length) {
+        const availability=c=>[c.keyCode ? 'Harmony keycode' : c.keyCodeState==='unsupported' ? 'Unsupported KeyCode format' : '',c.raw ? 'Raw data' : c.rawState==='unsupported' ? 'Unsupported Raw format' : ''].filter(Boolean).join(' · ') || 'Not supplied';
+        const overview=details('Command details',table(['Command','Code data','Protocol ID','Transport type','Learned'],codes.map(c=>[c.name,availability(c),c.protocolId,c.transport,c.learned])));overview.querySelector('details').open=!supplied.length;content.append(overview);
+      }
+    }
+    const section=details('IR codes',content),disclosure=section.querySelector('details'),key=JSON.stringify([data.host,device.id]);
+    disclosure.open=expandedIr.has(key);disclosure.addEventListener('toggle',()=>{if(disclosure.isConnected){if(disclosure.open)expandedIr.add(key);else expandedIr.delete(key);}});parent.append(section);
   }
   function renderActivities(content,s) {
     content.append(heading('Activities','See which devices participate, their selected inputs, configured power order, and explicit start/end actions.'));
@@ -221,8 +231,8 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
     const ready=data.cloud.saved || data.cloud.connected && data.cloud.host===data.host;
     const key=JSON.stringify([data.host,path,owner.kind,owner.id]), state=cloudReads.get(key), status=e('p',undefined,'cloud-read-status');
     status.dataset.cloudRead=key;status.tabIndex=-1;status.setAttribute('role',state?.error ? 'alert' : 'status');
-    const loaded=path==='ir-codes' ? data.cloud.codes?.deviceId===owner.id : path==='activity-roles' ? data.cloud.activityRoles?.activityId===owner.id : path==='button-catalog' ? data.cloud.buttonCatalog?.ownerKind===owner.kind && data.cloud.buttonCatalog.ownerId===owner.id : data.cloud.mapOwner?.kind===owner.kind && data.cloud.mapOwner.id===owner.id;
-    status.textContent=state?.error ? `${state.error}${loaded ? ' Showing the previously loaded data.' : ''}` : state?.loading ? 'Loading from Logitech…' : loaded ? 'Loaded from Logitech.' : !data.cloud.loginAvailable ? 'Open this page over HTTPS or through localhost to load Logitech data.' : !ready ? 'Save your Logitech login in Review changes to load this data.' : data.busy || localBusy ? 'Wait for the current operation to finish.' : '';
+    const loaded=path==='ir-codes' ? !!data.cloud.codes?.[owner.id] : path==='activity-roles' ? data.cloud.activityRoles?.activityId===owner.id : path==='button-catalog' ? data.cloud.buttonCatalog?.ownerKind===owner.kind && data.cloud.buttonCatalog.ownerId===owner.id : data.cloud.mapOwner?.kind===owner.kind && data.cloud.mapOwner.id===owner.id;
+    status.textContent=state?.error ? `${state.error}${loaded ? ' Showing the previously loaded data.' : ''}` : state?.loading ? 'Loading from Logitech…' : loaded ? path==='ir-codes' ? `Saved ${time(data.cloud.codes[owner.id].updatedAt)}.` : 'Loaded from Logitech.' : !data.cloud.loginAvailable ? 'Open this page over HTTPS or through localhost to load Logitech data.' : !ready ? 'Save your Logitech login in Review changes to load this data.' : data.busy || localBusy ? 'Wait for the current operation to finish.' : '';
     status.hidden=!status.textContent;if(state?.error) status.classList.add('error');
     const b=e('button',state?.loading ? 'Loading…' : label);b.type='button';
     b.dataset.cloudReadButton='true';b.dataset.cloudReadAllowed=String(!!ready && data.cloud.loginAvailable);
