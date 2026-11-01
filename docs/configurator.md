@@ -96,4 +96,4 @@ The configurator includes a browser tab icon and phone home-screen icon. In Safa
 
 ## Optional HTTPS certificate for the web configurator
 
-The certificate and private-key fields enable HTTPS directly on the plugin’s webserver; they are not Logitech account certificates. Leave both fields empty to use local HTTP through the **Open configurator** button in Homebridge settings. Hub inspection, answers and drafts do not require a certificate. Leave them empty also when an HTTPS reverse proxy such as Nginx handles the browser connection. Entering a configurator password or Logitech credentials requires HTTPS or a localhost SSH tunnel.
+The certificate and private-key fields enable HTTPS directly on the plugin’s webserver. Leave both fields empty to use local HTTP through the **Open configurator** button in Homebridge settings. Hub inspection, answers and drafts do not require a certificate. Leave them empty also when an HTTPS reverse proxy such as Nginx handles the browser connection. Entering a configurator password or Logitech credentials requires HTTPS or a localhost SSH tunnel.
