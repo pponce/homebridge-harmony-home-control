@@ -29,7 +29,7 @@ try {
   await page.getByText('Incorrect configurator username or password.',{exact:true}).waitFor();
   await page.getByLabel('Configurator username',{exact:true}).fill('TestUser');
   await page.getByLabel('Configurator password',{exact:true}).fill('browser-test-password');
-  await page.getByLabel('Remember this browser for 30 days').check();
+  await page.getByRole('checkbox',{name:'Remember this browser for 30 days',exact:true}).check();
   await page.getByRole('button',{name:'Sign in',exact:true}).click();
   await page.waitForFunction(()=>!document.getElementById('read').disabled);
   await page.locator('#read').click();await page.getByRole('heading',{name:'Living room display'}).waitFor();
