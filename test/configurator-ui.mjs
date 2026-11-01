@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp,mkdir,rm } from 'node:fs/promises';
+import { mkdtemp,mkdir,rm,readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ConfiguratorServer } from '../lib/configurator/server.js';
 import { ConfiguratorError } from '../lib/configurator/hub.js';
@@ -9,15 +9,22 @@ import { nativeFixture } from './configurator-fixtures.js';
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const artifacts=join(process.cwd(),'local-work','artifacts');await mkdir(artifacts,{recursive:true});
 const directory=await mkdtemp(join(artifacts,'configurator-ui-')), imported=nativeFixture();let offline=false,pending;
+const cloudButton={key:'Power',id:'button-1',type:'HardRemoteButton',label:'',group:'Power',press:{kind:'command',deviceId:'101',command:'PowerOn'},long:null,double:null};
 const server=new ConfiguratorServer({directory,config:{...normalizeConfig(),advertiseAddress:'127.0.0.1',harmonyHubAddresses:[imported.host],configuratorPort:0},
   reader:{read:async()=>{if(offline)throw new ConfiguratorError('The test hub is offline.',502);return structuredClone(imported);},close(){}},
   cloudFactory:()=>({target:null,async login(email,password,target){assert.equal(email,'fake@example.invalid');assert.equal(password,'fake-password');this.target=target;},async preview(change){return {before:change.before ?? 1200,fingerprint:'browser-review'};},async apply(change,submitted){submitted();pending=change;},async sync(progress){
     progress('Waiting for the test hub');if(!pending)return;
-    if(pending.kind==='activity') imported.resources.ActivityList.Activities[0].Name=pending.value;
+    if(pending.kind==='activity') {
+      const activity=imported.resources.ActivityList.Activities[0];
+      if(pending.field==='name') activity.Name=pending.value;
+      else if(['enter','leave'].includes(pending.field)) activity[pending.field==='enter'?'EnterActions':'LeaveActions']=pending.value.map((a,i)=>a.kind==='command'?{__type:'CommandActivityAction',CommandName:a.command,'DeviceId-':a.deviceId,ActionOrder:i}:{__type:'DelayActivityAction',Duration:a.delay,ActionOrder:i});
+      else if(pending.field==='input') activity.Roles[pending.role].SelectedInput={Name:pending.value};
+    }
+    else if(pending.kind==='button') cloudButton[pending.field]=pending.value;
     else if(pending.field==='delays.powerOn') imported.resources.DeviceList.DevicesWithFeatures[0].DeviceFeatures[0].PowerOnDelay=pending.value;
     else if(pending.field==='inputCommands') imported.resources.DeviceList.DevicesWithFeatures[0].DeviceFeatures[1].Inputs.find(i=>i.InputName===pending.inputName).Actions=pending.value.map((a,i)=>a.kind==='command'?{__type:'IRPressAction',IRCommandName:a.command,Duration:a.duration,Order:i+1}:{__type:'IRDelayAction',Delay:a.delay,Order:i+1});
     pending=null;
-  },close(){this.target=null;}})
+  },async buttonMaps(owner){return [{ownerKind:owner.kind,ownerId:owner.id,target:{remoteId:'800',skinId:'104',surfaceId:'7',mapId:'501',identifier:''},buttons:[structuredClone(cloudButton)]}];},async infraredCodes(){return [{name:'PowerOn',raw:'0000 006D 0002',protocolId:'9',transport:'1'},{name:'PowerOff',raw:null,protocolId:'9',transport:'1'}];},close(){this.target=null;}})
 });
 await server.start();
 await server.setPassword('browser-test-password','testuser');
@@ -174,6 +181,33 @@ try {
   await inputChange.getByRole('button',{name:'Review cloud save',exact:true}).click();await page.getByRole('button',{name:'Save to Logitech',exact:true}).click();
   await page.getByRole('button',{name:'Compile & sync this hub',exact:true}).click();await page.getByText('Confirmed on hub',{exact:true}).nth(2).waitFor({timeout:12000});
   await page.screenshot({path:join(artifacts,'ui-configurator-changes.png'),fullPage:true});
+  await page.getByRole('button',{name:/^Activities/}).click();
+  await page.getByRole('button',{name:'Edit Start actions for Play <game>',exact:true}).click();
+  await page.getByLabel('Delay 1 (ms)',{exact:true}).fill('800');
+  await page.getByRole('button',{name:'Add command',exact:true}).click();await page.getByLabel('Device 2',{exact:true}).selectOption('101');await page.getByLabel('Command 2',{exact:true}).selectOption('PowerOn');
+  assert.equal(await page.getByLabel('Hold duration 2 (ms)',{exact:true}).count(),0);
+  await page.screenshot({path:join(artifacts,'ui-configurator-activity-editor.png'),fullPage:true});
+  await page.getByRole('button',{name:'Save draft',exact:true}).click();
+  const startChange=page.locator('section.panel').filter({has:page.getByRole('heading',{name:'Play <game> · Start actions',exact:true})});
+  await startChange.getByRole('button',{name:'Review cloud save',exact:true}).click();await page.getByRole('button',{name:'Save to Logitech',exact:true}).click();
+  await page.getByRole('button',{name:'Compile & sync this hub',exact:true}).click();await startChange.getByText('Confirmed on hub',{exact:true}).waitFor({timeout:12000});
+  await page.getByRole('button',{name:/^Activities/}).click();
+  await page.getByRole('button',{name:'Edit Living room display selected input for Play <game>',exact:true}).click();
+  await page.getByLabel('Selected input',{exact:true}).selectOption('HDMI 2');await page.getByRole('button',{name:'Save draft',exact:true}).click();
+  await page.getByRole('button',{name:/^Activities/}).click();await page.getByRole('button',{name:'Load cloud button maps',exact:true}).click();
+  await page.locator('summary').filter({hasText:'Remote surface 7'}).click();
+  await page.getByRole('button',{name:'Edit Power short press',exact:true}).click();await page.getByLabel('Command',{exact:true}).selectOption('PowerOff');
+  await page.getByRole('button',{name:'Save draft',exact:true}).click();
+  const buttonChange=page.locator('section.panel').filter({has:page.getByRole('heading',{name:'Play <game> · Power · Short press',exact:true})});
+  await buttonChange.getByRole('button',{name:'Review cloud save',exact:true}).click();await page.getByRole('button',{name:'Save to Logitech',exact:true}).click();
+  await page.getByRole('button',{name:'Compile & sync this hub',exact:true}).click();await buttonChange.getByText('Synced · check the remote',{exact:true}).waitFor({timeout:12000});
+  await buttonChange.getByRole('button',{name:'I verified this on the remote',exact:true}).click();await buttonChange.getByText('Confirmed on remote',{exact:true}).waitFor();
+  await page.waitForFunction(()=>!document.getElementById('read').disabled);
+  await page.getByRole('button',{name:/^Devices/}).click();await page.getByRole('button',{name:'Load IR codes',exact:true}).click();
+  await page.getByText('1 of 2 commands include a Raw payload.',{exact:true}).waitFor();
+  const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Export this device’s IR codes',exact:true}).click();const download=await downloadPromise;
+  assert.equal(download.suggestedFilename(),'harmony-ir-101.json');const exported=JSON.parse(await readFile(await download.path(),'utf8'));assert.equal(exported.commands[0].raw,'0000 006D 0002');assert.equal(exported.commands.length,1);
+  await page.screenshot({path:join(artifacts,'ui-configurator-ir-codes.png'),fullPage:true});
   await page.reload();await page.getByRole('heading',{name:'Living room display'}).waitFor();
   await page.getByRole('button',{name:'Setup Assistant',exact:true}).click();assert.equal(await page.getByLabel('Device type',{exact:true}).nth(1).inputValue(),'switch');
   assert.equal(await sleepMethods.getByRole('checkbox',{name:'HDMI-CEC',exact:true}).isChecked(),true);

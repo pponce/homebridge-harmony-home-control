@@ -16,7 +16,7 @@ test('activity edits preserve unknown XML, inputs, nested names and namespace sc
   assert.equal(identity(updated,root),'401');assert.throws(()=>activityPatch(xml,{...change,before:'Already changed'}),/changed since import/);
   const role=draftChange({kind:'activity',id:'401',field:'powerOnOrder',role:0,value:3,version:s.version},s);const patched=activityPatch(xml,role);
   assert.ok(patched.includes('<a:PowerOnOrder>3</a:PowerOnOrder>'));assert.ok(patched.includes('<a:PowerOffOrder>1</a:PowerOffOrder>'));
-  assert.throws(()=>activityPatch(xml,{...role,cloud:{...role.cloud,roleId:'wrong'}}),/differs/);
+  assert.throws(()=>activityPatch(xml,{...role,roleTarget:{...role.roleTarget,id:'wrong'}}),/differs/);
 });
 test('XML fails closed on expanding entities, malformed nesting and absent edit fields',() => {
   assert.throws(()=>parseXml('<!DOCTYPE x [<!ENTITY x "bad">]><x>&x;</x>'),/Unsupported/);
@@ -39,10 +39,11 @@ test('cloud auth exchanges tokens only with Logitech, saves a single activity, r
     return new Response(envelope(name));
   }});
   await cloud.login('fake@example.invalid','fake-password',{remoteId:'800',accountId:'900'});
-  await cloud.apply(draftChange({kind:'activity',id:'401',field:'name',value:'New game',version:s.version},s));
+  const change=draftChange({kind:'activity',id:'401',field:'name',value:'New game',version:s.version},s);
+  await cloud.apply(change,()=>{},await cloud.preview(change));
   await cloud.sync();
   const ops=calls.filter(c=>c.headers.SOAPAction).map(c=>c.headers.SOAPAction.split('/').at(-1).replace('"',''));
-  assert.deepEqual(ops,['GetMyHousehold','SimpleGetActivities','SaveActivities','SimpleGetActivities','StartCompileWithLocale','SetRemoteSyncRequired','IsRemoteSyncRequired','RegisterSuccessfulSync']);
+  assert.deepEqual(ops,['GetMyHousehold','GetMyHousehold','SimpleGetActivities','GetMyHousehold','SimpleGetActivities','SaveActivities','GetMyHousehold','SimpleGetActivities','StartCompileWithLocale','SetRemoteSyncRequired','IsRemoteSyncRequired','RegisterSuccessfulSync']);
   assert.ok(calls.find(c=>c.headers.SOAPAction?.includes('StartCompileWithLocale')).body.includes('<localeId>en-US</localeId>'));
   assert.ok(calls.find(c=>c.headers.SOAPAction?.includes('RegisterSuccessfulSync')).body.includes('<accountId>900</accountId><remoteId>800</remoteId>'));
   cloud.close();assert.equal(cloud.cookies.size,0);assert.equal(cloud.target,null);

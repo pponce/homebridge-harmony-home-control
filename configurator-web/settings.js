@@ -2,6 +2,7 @@
 const timing = (label, max, help) => ({ label, type:'number', min:0, max, help, guide:'delay' });
 const sequence = (label,help) => ({label,type:'actions',help,guide:'commands'});
 export const deviceFields = {
+  name: {label:'Device name',type:'text',maxLength:64,help:'Name',guide:'device'},
   'delays.powerOn': timing('Power-on delay (ms)',60000,'Power-on delay'),
   'delays.input': timing('Input delay (ms)',60000,'Input delay'),
   'delays.interDevice': timing('Inter-device delay (ms)',60000,'Inter-device delay'),
@@ -25,19 +26,32 @@ export const deviceFields = {
 export const activityFields = {
   name: { label:'Activity name', type:'text', maxLength:64, help:'Name', guide:'activity' },
   order: { label:'Activity display order', type:'number', min:0, max:1000, help:'Display order', guide:'activity' },
+  enter: {label:'Start actions',type:'activity-actions',help:'Start actions',guide:'activity'},
+  leave: {label:'End actions',type:'activity-actions',help:'End actions',guide:'activity'},
 };
 export const roleFields = {
+  input: {label:'Selected input',type:'activity-input',help:'Selected input',guide:'role'},
   powerOnOrder: { label:'Power-on order', type:'number', min:0, max:1000, help:'On order', guide:'role' },
   powerOffOrder: { label:'Power-off order', type:'number', min:0, max:1000, help:'Off order', guide:'role' },
   nextDeviceDelay: { label:'Delay before next device (ms)', type:'number', min:0, max:60000, help:'Next delay (ms)', guide:'role' },
 };
 export function settingSpec(change) {
+  if(change.kind==='button') return ['press','long','double'].includes(change.field) ? {type:'button-action',label:'Button assignment',guide:'buttons'} : null;
   const fields = change.kind === 'device' ? deviceFields : change.role !== undefined ? roleFields : activityFields;
   return Object.hasOwn(fields,change.field) ? fields[change.field] : null;
 }
 export const isInfrared = device => /^(1|ir|infrared(?: \(ir\))?)$/i.test(String(device.transport ?? '').trim());
 export const orderedInputs = device => [...(device?.inputs || [])].sort((a,b) => (a.order ?? Infinity) - (b.order ?? Infinity));
 export function draftValue(item,field,inputName) {
+  if(activityFields[field]?.type==='activity-actions') {
+    if(!item || item.actionsKnown?.[field]===false) return null;
+    return [...(item[field] || [])].sort((a,b)=>(a.order ?? 0)-(b.order ?? 0)).map(a=> {
+      const type=String(a.type || '').split(':')[0];
+      if(type==='CommandActivityAction') return {kind:'command',command:a.command,deviceId:a.deviceId};
+      if(['DelayActivityAction','DelayAction'].includes(type)) return {kind:'delay',delay:a.delay};
+      return {kind:'unsupported',type};
+    });
+  }
   if (deviceFields[field]?.type === 'actions') {
     const source=field === 'inputCommands' ? item?.inputs?.find(i=>i.name===inputName) : null;
     if (!item || (source ? source.actionsKnown === false : item.actionsKnown?.[field] === false)) return null;
@@ -73,8 +87,9 @@ export function inputMethodLabel(value) {
   return label ? `${label} (code ${value})` : /^\d+$/.test(String(value)) ? `Reported method code ${value}` : value;
 }
 export function formatDraftValue(change,value) {
+  if(change.kind==='button') return value===null ? 'Unassigned' : value.kind==='command' ? `${value.command} · device ${value.deviceId}` : value.kind==='channel' ? `Channel ${value.channel} · device ${value.deviceId}` : `System action: ${value.type}`;
   if (value == null || value === '') return 'Not supplied';
-  if (Array.isArray(value)) return value.length ? value.map((v,i) => `${i+1}. ${typeof v === 'string' ? v : v.kind === 'command' ? `${v.command}${v.duration == null ? '' : ` (hold ${v.duration} ms)`}` : v.kind === 'delay' ? `Wait ${v.delay} ms` : `Unsupported action: ${v.type}`}`).join('\n') : 'No actions';
+  if (Array.isArray(value)) return value.length ? value.map((v,i) => `${i+1}. ${typeof v === 'string' ? v : v.kind === 'command' ? `${v.command}${v.deviceId ? ` · device ${v.deviceId}` : ''}${v.duration == null ? '' : ` (hold ${v.duration} ms)`}` : v.kind === 'delay' ? `Wait ${v.delay} ms` : `Unsupported action: ${v.type}`}`).join('\n') : 'No actions';
   const spec = settingSpec(change), label = spec?.options?.find(([v]) => v === value)?.[1];
   return label || (value === true ? 'Yes' : value === false ? 'No' : String(value));
 }

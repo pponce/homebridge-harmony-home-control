@@ -77,7 +77,7 @@ test('draft validation accepts unknown supported values without inventing a befo
   assert.equal(draftChange(base,s).cloud.resource,'PowerFeature');assert.equal(draftChange(base,s).before,1000);
   assert.throws(()=>draftChange({...base,version:'old'},s),/changed/);assert.throws(()=>draftChange({...base,value:-1},s),/valid value/);assert.throws(()=>draftChange({...base,field:'__proto__'},s),/not editable/);
   for (const [field,spec] of Object.entries(deviceFields)) {
-    if (['controlPort','inputOrder','inputCommands'].includes(field) || spec.type === 'actions') continue;
+    if (['name','controlPort','inputOrder','inputCommands'].includes(field) || spec.type === 'actions') continue;
     const value=spec.options?.[0][0] ?? (spec.type === 'boolean' ? false : 0);
     const change=draftChange({...base,id:'102',field,value},s);
     assert.equal(change.before,null);assert.equal(change.value,value);assert.ok(change.cloud);
@@ -89,7 +89,7 @@ test('draft validation accepts unknown supported values without inventing a befo
   const a=draftChange({kind:'activity',id:'401',field:'powerOnOrder',role:0,value:2,version:s.version},s);assert.equal(a.cloud.field,'PowerOnOrder');assert.equal(a.cloud.roleId,'301');
   s.activities[0].order=null;s.activities[0].roles[0].powerOnOrder=null;
   for (const extra of [{field:'order'},{field:'powerOnOrder',role:0},{field:'nextDeviceDelay',role:1}]) {
-    const change=draftChange({kind:'activity',id:'401',value:1,version:s.version,...extra},s);assert.equal(change.before,null);assert.equal(change.cloud,null);
+    const change=draftChange({kind:'activity',id:'401',value:1,version:s.version,...extra},s);assert.equal(change.before,null);assert.ok(change.cloud);
   }
 });
 test('input-method drafts retain missing values and label only recognized codes',() => {
@@ -175,6 +175,26 @@ test('configurator requires one-use authentication and rejects CSRF, foreign ori
   assert.equal((await f.call('refresh',{})).status,200);assert.equal(f.reads(),1);
   const asset=await fetch(f.origin);assert.match(asset.headers.get('content-security-policy'),/frame-ancestors 'none'/);assert.match(await asset.text(),/Setup Assistant/);
 });
+test('cloud map drafts require a bound session catalog; IR payloads and map identities stay out of review exports',async t=>{
+  const f=await serverFixture(t),button={key:'Power',id:'button-1',type:'HardRemoteButton',press:{kind:'command',deviceId:'101',command:'PowerOn'},long:null,double:null},target={remoteId:'800',skinId:'104',surfaceId:'7',mapId:'501',identifier:''};let writes=0;
+  f.server.cloudFactory=()=>({target:null,async login(e,p,t){this.target=t;},close(){},async buttonMaps(owner){return [{ownerKind:owner.kind,ownerId:owner.id,target,buttons:[button]}];},async infraredCodes(){return [{name:'PowerOn',raw:'test-ir-payload'}];},async preview(d){return {before:d.before,fingerprint:'map-review'};},async apply(d,submitted){writes++;submitted();},async sync(){}});
+  const {result}=await f.call('refresh',{});await f.call('login',{email:'fake@example.invalid',password:'test-password'});
+  const change={kind:'button',id:'401',ownerKind:'activity',field:'press',button:{key:button.key,id:button.id,type:button.type},mapTarget:target,version:result.snapshot.version,value:{kind:'command',deviceId:'101',command:'PowerOff'}};
+  assert.equal((await f.call('draft',{change})).status,409);
+  assert.equal((await f.call('button-maps',{owner:{kind:'activity',id:'999'}})).status,400);
+  assert.equal((await f.call('button-maps',{owner:{kind:'activity',id:'401'}})).status,200);
+  const drafted=await f.call('draft',{change});assert.equal(drafted.status,200);const key=drafted.result.drafts[0].key;
+  await f.call('ir-codes',{owner:{kind:'device',id:'101'}});
+  const exported=(await f.call('export')).result;assert.ok(!JSON.stringify(exported).includes('test-ir-payload'));assert.equal(exported.drafts[0].mapTarget,undefined);
+  assert.ok(!String(await readFile(join(f.directory,'configurator.json'))).includes('test-ir-payload'));
+  assert.equal((await f.call('apply',{key,confirm:true})).status,409);assert.equal(writes,0);
+  const review=(await f.call('preview',{key})).result.cloud.review;assert.equal((await f.call('apply',{key,confirm:true,reviewToken:review.token})).status,200);assert.equal(writes,1);
+  await f.call('refresh',{});assert.equal((await f.call('state')).result.drafts[0].status,'cloud-saved');
+  const session=f.server.sessions.get(f.cookie.split('=')[1]);f.server.job={host:'192.0.2.70'};await f.server.runSync('192.0.2.70',session);
+  assert.equal((await f.call('state')).result.drafts[0].status,'remote-check');
+  assert.equal((await f.call('remote-verified',{key,confirm:true})).result.drafts[0].status,'remote-confirmed');
+  f.imported.accountId='901';await f.call('refresh',{});assert.deepEqual((await f.call('state')).result.cloud.maps,[]);
+});
 test('answers and drafts survive restart; stale pages conflict and refreshed imports verify manual changes',async t => {
   const f=await serverFixture(t);const first=await f.call('refresh',{});const s=first.result.snapshot;
   await f.call('draft',{change:{kind:'device',id:'101',field:'delays.powerOn',value:1500,version:s.version}});
@@ -223,10 +243,12 @@ test('missing activity-role drafts verify the original device after roles move o
   state=await f.call('refresh',{});assert.equal(state.result.drafts[0].status,'changed-again');
 });
 test('a possibly submitted cloud save cannot be blindly replayed',async t => {
-  const f=await serverFixture(t);let writes=0;f.server.cloudFactory=()=>({target:null,login:async function(){this.target={accountId:'900',remoteId:'800'};},close(){},apply:async(d,submitted)=>{writes++;submitted();throw new ConfiguratorError('Transport interrupted',502);}});
+  const f=await serverFixture(t);let writes=0;f.server.cloudFactory=()=>({target:null,login:async function(){this.target={accountId:'900',remoteId:'800'};},close(){},async preview(d){return {before:d.before,fingerprint:'activity-review'};},apply:async(d,submitted)=>{writes++;submitted();throw new ConfiguratorError('Transport interrupted',502);}});
   const {result}=await f.call('refresh',{});await f.call('login',{email:'fake@example.invalid',password:'test-only'});
   const drafted=await f.call('draft',{change:{kind:'activity',id:'401',field:'name',value:'New game',version:result.snapshot.version}});const key=drafted.result.drafts[0].key;
-  assert.equal((await f.call('apply',{key,confirm:true})).status,502);
+  assert.equal((await f.call('apply',{key,confirm:true})).status,409);
+  const review=(await f.call('preview',{key})).result.cloud.review;
+  assert.equal((await f.call('apply',{key,confirm:true,reviewToken:review.token})).status,502);
   const current=await f.call('state');assert.equal(current.result.drafts[0].status,'unconfirmed');
   assert.equal((await f.call('apply',{key,confirm:true})).status,409);assert.equal(writes,1);
   const disk=await readFile(join(f.directory,'configurator.json'),'utf8');assert.ok(!disk.includes('test-only'));assert.ok(!disk.includes('fake@example'));

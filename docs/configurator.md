@@ -26,26 +26,35 @@ Device control settings preserve both numeric and text values from the hub. Know
 
 | Configuration | Inspect | Apply changes |
 | --- | --- | --- |
-| Devices and available command names | Imported when supplied by the hub | Inspect here; add or learn commands using Harmony |
+| Device names and available command names | Imported when supplied by the hub | Rename devices here; add or learn commands using Harmony |
+| IR command payloads | Load IR codes from Logitech for an infrared device | View and export supplied Raw payloads per device; no transmission or format conversion |
 | Power actions, per-input commands and shared input sequences | Command and delay steps | Add, remove, reorder and adjust steps; review and save to Logitech |
 | Device power policy, power command type, repeats and power-on/input/inter-device/inter-key delays | Imported, with separately reported defaults when available | Draft here, review the current cloud value, save to Logitech, then compile and sync |
 | Infrared output assignment | Imported control port | Choose hub / mini blaster outputs when infrared transport is confirmed; review and save to Logitech |
 | Input order | Inputs sorted by their stored order | Move inputs up/down in a draft; review and save to Logitech |
 | Input method | Reported method, separate from input names and commands | Draft a recognized method; cloud saving depends on the profile representation and existing commands. Unsupported methods use Harmony Input Settings |
 | Activity name and display order | Imported | Draft, review and save to Logitech; compile and sync separately |
-| Existing activity role power-on/off order | Imported | Draft, review and save to Logitech; compile and sync separately |
-| Delay before the next device | Imported when present | Draft here; apply using Harmony |
-| Activity roles, selected inputs and explicit start/end actions | Imported | Change using Harmony |
-| Button maps and sequences | Available hub maps only | Inspect only; remote-specific maps may be absent |
+| Existing activity role power-on/off order, next-device delay and selected input | Imported when present | Draft, review and save to Logitech; compile and sync separately |
+| Activity Start/End actions | Extra command and delay steps | Add, remove and reorder steps, including an empty sequence; review and save to Logitech |
+| Activity type and participating device roles | Imported | Change using Harmony activity setup |
+| Button assignments | Load cloud button maps for the selected device or activity | Edit existing short, long and double press command/channel assignments; review, save, sync and check the remote |
+| New buttons, named button sequences, system actions and touchscreen layout | Available hub or cloud data | Configure using Harmony button customization |
+| Manufacturer, model, transport and reported profile defaults | Imported | Defined by the device profile; not editable in this configurator |
 | HDMI wiring, CEC, desired power behavior and automation notes | Your answers | Saved locally in the configurator |
 
 **Not supplied** means the imported value is unknown. It does not mean zero, disabled, a known default, or that the device cannot support the setting. **Reported default** is shown only when the hub supplies a separate profile default; it is never substituted for a missing active value. **Unknown** in that column means no default was reported. Choose Read hub after an update to refresh these values.
 
-Use **Set draft** for a supported setting with no imported value. The editor starts blank and offers valid choices or an explicit numeric range; it does not assume zero or Yes. Device profiles may offer a narrower range or omit a setting in Harmony. Drafts are proposals, not proof of device capabilities. Activity fields without an original value also use manual Harmony guidance rather than a cloud save. If the hub continues to omit a setting after you apply it, the draft remains unconfirmed.
+Use **Set draft** for a supported setting with no imported value. The editor starts blank and offers valid choices or an explicit numeric range. Device profiles may offer a narrower range or omit a setting in Harmony. Cloud review shows the current Logitech value before saving. If the hub continues to omit a setting after you apply it, hub verification remains pending.
 
 **Input method** is separate from the input list and its commands. The list can be present without a method value. **Input sequence actions** shows shared Start, Next, Previous and Finish steps: opening an input menu, navigating it and confirming a selection. A direct command such as Input1 may need none of these steps. **Edit draft** beside an input edits its selection commands. Expand **Input sequence actions** to edit shared steps. Command steps offer an optional hold duration; delay steps insert a pause. Use **Add command**, **Add delay**, **Move up/down** and **Remove**, then review and save. Save the required commands before selecting a method, and compile/sync after completing the changes. Cloud method saves currently require a recognized numeric representation; named or unfamiliar representations use Harmony **Input Settings**. Complex device-state actions and other unsupported action types must also be configured in Harmony. Existing metadata on retained command/delay steps is preserved. Reordering inputs changes their list order, not HDMI socket names or assigned commands.
 
-This is a preview, not a complete replacement for the Harmony application. Unknown vendor fields, raw IR codes, account details and credentials are not exposed in the inspector. FunctionList is requested to report resource availability; function-map interpretation is not implemented. Unsupported fields are informational and cannot be saved through an arbitrary JSON editor.
+Under an activity, **Start actions** and **End actions** edit extra commands and delays. Choose a participating device for each command. Harmony also handles power and selected inputs through the activity’s roles. Activity command steps use their normal command duration. Unsupported action types require Harmony.
+
+Under **Button maps**, choose **Load cloud button maps** after saving a Logitech login. Expand a remote surface and edit a button’s gesture. The editor preserves the other gestures, buttons and vendor metadata. Optional gestures can be left unassigned. Adding buttons, changing between command and channel action types, editing named sequences or system actions, and changing touchscreen layout require Harmony. Missing or ambiguous remote/surface identities block editing. These maps are loaded for the current session. After saving and syncing, check the remote and choose **I verified this on the remote** in the change record.
+
+For an infrared device, **Load IR codes** retrieves any command Raw payloads supplied by Logitech. Expand a command to see its payload and use **Export this device’s IR codes** to download the supplied payloads as JSON. The export preserves Logitech’s encoding; it does not convert to Pronto hex. Commands without a payload are listed separately. Bluetooth and network commands have no IR signal to export. Payloads are held for the current session and are excluded from the general review export.
+
+Unknown vendor fields and credentials are not exposed in the inspector. FunctionList is requested to report resource availability; function-map interpretation is not implemented. Unsupported fields are informational and cannot be saved through an arbitrary JSON editor.
 
 Cloud writes use an unofficial protocol and have automated fixture coverage. Validate the preview against your own hub before relying on it. There is no local resource-write endpoint and no cloud blocking.
 
@@ -85,9 +94,9 @@ The saved password is never filled back into the form. **Replace saved login** u
 
 Saved Logitech logins use authenticated AES-256-GCM encryption in `configurator-logitech.json`, with a separate random key in `configurator-logitech.key`. Both files are readable/writable only by the Homebridge account (mode 0600). They are not part of Homebridge configuration or review exports. A server administrator, or anyone who obtains both files, can recover the password; encryption does not protect against a compromised Homebridge server. Session cookies remain in memory and are discarded when the connection closes or the child bridge restarts.
 
-For a supported draft, choose **Review cloud save**. Device reviews first fetch the current cloud value, including when the hub omitted it. **Save to Logitech** checks the cloud document again, rejects changes since review, updates the selected setting and reads it back. The review expires after five minutes and cannot authorize a different draft. Device ownership is checked against the selected account before saving. Activity saves check the latest value against the imported original. Unchanged vendor fields are preserved. Multiple drafts are separate saves, not an atomic transaction. A feature absent from the cloud must first be set up in Harmony.
+For a supported draft, choose **Review cloud save**. Each review fetches the current cloud value, including when the hub omitted it. **Save to Logitech** checks the cloud document again, rejects changes since review, updates the selected setting and reads it back. The review expires after five minutes and cannot authorize a different draft. Device ownership and activity membership are checked before saving. Unchanged vendor fields are preserved. Multiple drafts are separate saves, not an atomic transaction. A feature absent from the cloud must first be set up in Harmony.
 
-**Compile & sync this hub** compiles the cloud configuration and requests a hub sync. This sync applies the current cloud configuration for the hub, including changes made elsewhere. After the cloud indicates completion, the configurator reads the hub again. A draft is **Confirmed on hub** only when its imported value matches the proposal. This does not establish the physical device’s state.
+**Compile & sync this hub** compiles the cloud configuration and requests a hub sync. This sync applies the current cloud configuration for the hub, including changes made elsewhere. After the cloud indicates completion, the configurator reads the hub again. A draft is **Confirmed on hub** only when its imported value matches the proposal. Button changes use **Synced · check the remote**, followed by **Confirmed on remote** when you record your check. These statuses do not establish the controlled device’s internal state.
 
 If a save is interrupted after submission, it is marked **Cloud save unconfirmed** and cannot be replayed automatically. Check the setting in Harmony, sync if appropriate, and read the hub. Discarding a record never undoes an applied change. There is no automatic rollback.
 

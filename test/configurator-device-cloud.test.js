@@ -12,6 +12,12 @@ const draft=(field,value,extra={})=>{const s=modelFixture();return draftChange({
 const root=raw=>parseXml(raw).children[0];
 const commands=['PowerOn','PowerOff','InputHdmi1','InputHdmi2'];
 
+test('device rename uses the name operation and selected account/device identity',()=>{
+  const change=draft('name','TV & receiver'),raw=deviceDocument(deviceResponse(deviceXml()),change).raw;
+  const updated=devicePatch(raw,change),body=deviceSaveBody(updated,change,ownedDevice(ownedHousehold(),target,'101')),op=root(body);
+  assert.equal(op.attributes['i:type'],'o:UpdateDeviceNameOperation');assert.equal(identity(body,op,'ParentAccount'),'900');assert.equal(identity(body,op,'DeviceId'),'101');assert.equal(field(body,op,'DeviceName'),'TV & receiver');assert.equal(child(op,'Device'),undefined);
+});
+
 test('device writes preserve vendor members, namespace scope and schema order for missing fields',()=>{
   const change=draft('delays.interKey',250), raw=deviceDocument(deviceResponse(deviceXml()),change).raw;
   const updated=devicePatch(raw,change), n=root(updated);
