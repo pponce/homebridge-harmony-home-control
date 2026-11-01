@@ -112,7 +112,7 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
     const split = e('div',undefined,'split'), detail = e('div'); split.append(items(s.devices,d.id,id => {selectedDevice = id; render();}),detail); content.append(split);
     const card = panel(), head = e('div',undefined,'panel-head'), title = e('div'); title.append(titleRow('h2',d.name,helpText['Device details']),p([d.manufacturer,d.model].filter(Boolean).join(' · '))); head.append(title,badge('Imported')); card.append(head);
     card.append(table(['Setting','Value','Reported default',''],[
-      ['Name',d.name,'',editButton('device',d,'name')],
+      ['Device name',d.name,'',editButton('device',d,'name')],
       ['Control transport',d.transportLabel || d.transport || 'Not reported by hub','Unknown',p('Determined by the device profile')],
       ['Control port',d.controlPortLabel || d.controlPort || 'Not reported by hub','Unknown',isInfrared(d) ? editButton('device',d,'controlPort') : p(d.transport ? 'IR assignment requires infrared control' : 'Read hub to identify the transport')],
       ['Command repeats',d.repeats,d.defaults?.repeats ?? 'Unknown',editButton('device',d,'repeats')],
@@ -347,7 +347,7 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
       if (d.cloud && d.status === 'draft') { const save = button('Review cloud save',() => confirmCloud(d),'primary'); save.disabled = !(connected || data.cloud.saved) || !data.cloud.loginAvailable || data.busy; actions.append(save); }
       if (!['hub-confirmed','remote-confirmed'].includes(d.status)) {
         const steps = e('div'), guide=settingSpec(d)?.guide;
-        steps.append(p(`In Harmony, open ${d.kind === 'device' ? `Devices → ${d.name}` : `Activities → ${d.name} → Customize / Settings`}.`));
+        steps.append(p(`In Harmony, open ${d.kind === 'device' || d.ownerKind==='device' ? `Devices → ${d.name}` : `Activities → ${d.name} → Customize / Settings`}.`));
         const instructions={
           delay:'Use Fix Delay in the mobile app, or Change Device Settings → Device delay settings in MyHarmony. Change one delay at a time and test cold startup, activity switches and All Off.',
           power:'Use Power Settings. Choose the intended power behavior and, if required, the separate On/Off commands or toggle command. A setting cannot add a power capability the device lacks.',
@@ -356,8 +356,8 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
           input:'Use Input Settings in Harmony. In MyHarmony, continue to the input list and drag inputs into the proposed order. Match the device’s actual menu or cycle. Reordering does not change the command assigned to each input.',
           inputMethod:'Use Input Settings in Harmony and choose the input-changing method. Complete the wizard to select its required commands, including any menu, navigation or confirmation steps. A method choice alone does not supply those commands.',
           commands:'Use Input Settings → Fix an input for selection commands, or Power Settings for power commands. Apply the proposed commands and pauses in order.',
-          role:'Open the activity’s startup/shutdown customization and adjust the named device’s order or delay. Keep the other device roles unchanged.',
-          activity:'Use the activity settings to change its name or position in the activity list.',
+          role:'Open activity settings for selected inputs, or startup/shutdown customization for the named device’s power order and delay.',
+          activity:'Use activity settings for names and display order, or startup/shutdown customization for extra commands and delays.',
           buttons:'Use button customization for the named remote, device or activity and gesture.',
           device:'Rename the device in its settings.',
         };

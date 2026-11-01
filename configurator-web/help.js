@@ -72,6 +72,7 @@ export const helpText = {
   'Group': 'Harmony’s function group for this button, such as navigation, playback, or volume. It organizes commands without changing what a press does.',
   'Activity type': 'The Harmony activity template, such as watching TV or playing a game. It helps define the device roles and available controls.',
   'Name': 'The activity’s display name in Harmony. A draft can propose a new name; the hub uses it after the change is applied and synced.',
+  'Device name': 'The name used for this device in Harmony. Review and save a new name, then sync to update the hub.',
   'Display order': 'The activity’s position in the activity list. Smaller values come first. This does not change device power-on order.',
   'Device / role': 'The participating device and its activity role, such as the display, volume controller, or intermediate receiver.',
   'Selected input': 'The input this activity asks the device to use. This is the saved target, not a reading of the current input.',

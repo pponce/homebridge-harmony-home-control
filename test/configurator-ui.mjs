@@ -242,5 +242,5 @@ try {
   await page.goto(server.accessLink().url);
   await page.waitForFunction(()=>!document.getElementById('read').disabled);
   assert.deepEqual(errors,[]);
-  console.log('Configurator browser workflow passed: control settings, section/field/disclosure help, keyboard/focus, nested dialogs, missing-value drafts without defaults, repeat/power choices, input reorder, multiple HDMI/ARC and power paths, add/remove persistence, conditional advice, cloud review/save/sync, stale read, HTML escaping, mobile and dark mode.');
+  console.log('Configurator browser workflow passed: control settings, section/field/disclosure help, keyboard/focus, nested dialogs, missing-value drafts without defaults, repeat/power choices, input reorder, multiple HDMI/ARC and power paths, add/remove persistence, conditional advice, cloud review/save/sync, activity command/delay editing, selected inputs, cloud button assignment and remote verification, per-device IR download, stale read, HTML escaping, mobile and dark mode.');
 } finally {await browser.close();await server.close();await rm(directory,{recursive:true,force:true});}

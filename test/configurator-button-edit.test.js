@@ -57,7 +57,9 @@ test('button saves require unchanged review and verify readback even when Logite
 test('IR reads return only supplied command payloads and reject non-infrared profiles',async()=>{
   const xml=envelope('GetCommands',`<KeyValueOfDeviceIdArrayOfCommand><Key><Value>101</Value></Key><Value><Command><Name>PowerOn</Name><Raw>0000 006D 0002</Raw><ProtocolId>9</ProtocolId><Secret>never return</Secret></Command><Command><Name>PowerOff</Name><Raw xmlns:i="${I}" i:nil="true"/></Command></Value></KeyValueOfDeviceIdArrayOfCommand>`);
   assert.equal(commandDetails(xml,'101')[0].raw,'0000 006D 0002');
+  assert.equal(commandDetails(xml.replace('0000 006D 0002','\n0000 006D 0002\n'),'101')[0].raw,'\n0000 006D 0002\n');
   const cloud=new HarmonyCloud();let transport='1';cloud.readDevice=async()=>({raw:`<Device><Transport>${transport}</Transport></Device>`});cloud.soap=async()=>xml;
   const result=await cloud.infraredCodes('101');assert.equal(result[0].raw,'0000 006D 0002');assert.equal(result[1].raw,null);assert.ok(!JSON.stringify(result).includes('never return'));
+  cloud.soap=async()=>xml.replace('<ProtocolId>9</ProtocolId>','<TransportType>32</TransportType><ProtocolId>9</ProtocolId>');assert.equal((await cloud.infraredCodes('101'))[0].raw,null);
   transport='2';await assert.rejects(cloud.infraredCodes('101'),/infrared/);cloud.close();
 });

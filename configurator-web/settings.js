@@ -2,7 +2,7 @@
 const timing = (label, max, help) => ({ label, type:'number', min:0, max, help, guide:'delay' });
 const sequence = (label,help) => ({label,type:'actions',help,guide:'commands'});
 export const deviceFields = {
-  name: {label:'Device name',type:'text',maxLength:64,help:'Name',guide:'device'},
+  name: {label:'Device name',type:'text',maxLength:64,help:'Device name',guide:'device'},
   'delays.powerOn': timing('Power-on delay (ms)',60000,'Power-on delay'),
   'delays.input': timing('Input delay (ms)',60000,'Input delay'),
   'delays.interDevice': timing('Inter-device delay (ms)',60000,'Inter-device delay'),
