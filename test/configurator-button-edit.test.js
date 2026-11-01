@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mapSurfaces, mapRequest, mapDocuments, mapView, selectMap, buttonDraft, buttonPatch, buttonValue } from '../lib/configurator/button-cloud.js';
+import { mapSurfaces, mapRequest, mapDocuments, mapView, selectMap, buttonDraft, buttonPatch, buttonValue, canvasDocuments } from '../lib/configurator/button-cloud.js';
 import { COMMON, commandDetails } from '../lib/configurator/device-cloud.js';
 import { HarmonyCloud } from '../lib/configurator/cloud.js';
 import { parseXml, descendants, identity } from '../lib/configurator/xml.js';
@@ -12,7 +12,7 @@ const owner={kind:'activity',id:'401'},surface={remoteId:'800',skinId:'104',surf
 export const buttonXml=()=>envelope('GetButtonMaps',`<u:AbstractButtonMap xmlns:u="${U}" xmlns:c="${COMMON}" xmlns:i="${I}" xmlns:z="urn:future" i:type="u:ActivityButtonMap">${id('ButtonMapId',501)}<u:ButtonMapIdentifier i:nil="true"/><u:Buttons><u:AbstractRemoteButton i:type="u:HardRemoteButton"><u:ButtonAction i:type="u:ButtonCommandAction" z:metadata="keep"><u:EventType>0</u:EventType><u:Id>action-1</u:Id><u:Order>0</u:Order><u:CommandName>PowerOn</u:CommandName>${id('DeviceId',101)}${id('FunctionId',601)}<z:Extra>untouched</z:Extra></u:ButtonAction><u:ButtonDoublePressAction i:nil="true"/><u:ButtonId>button-1</u:ButtonId><u:ButtonLongPressAction i:type="u:ButtonClientAction"><u:ActionName>Help</u:ActionName></u:ButtonLongPressAction><u:FunctionGroupType>Power</u:FunctionGroupType><u:ButtonKey>Power</u:ButtonKey></u:AbstractRemoteButton></u:Buttons>${id('RemoteId',800)}<u:Sequences>vendor data</u:Sequences>${id('SurfaceId',7)}${id('ActivityId',401)}</u:AbstractButtonMap>`);
 const fixture=()=>{const doc=mapDocuments(buttonXml(),owner,surface)[0],map=mapView(doc,owner),s=modelFixture();return {doc,map,s,base:{kind:'button',id:'401',ownerKind:'activity',field:'press',button:{key:'Power',id:'button-1',type:'HardRemoteButton'},mapTarget:map.target,version:s.version}};};
 test('button maps use their actual map ID and reject mismatched surfaces, owners and ambiguous documents',()=>{
-  const {doc,map}=fixture();assert.equal(map.target.mapId,'501');assert.equal(map.buttons[0].press.deviceId,'101');assert.equal(map.buttons[0].long.kind,'unsupported');
+  const {doc,map}=fixture();assert.equal(map.target.mapId,'501');assert.equal(map.buttons[0].press.deviceId,'101');assert.deepEqual(map.buttons[0].long,{kind:'system',name:'Help'});
   assert.equal(mapDocuments(buttonXml(),{kind:'activity',id:'999'},surface).length,0);
   assert.equal(mapDocuments(buttonXml(),owner,{...surface,surfaceId:'8'}).length,0);
   assert.equal(mapDocuments(buttonXml(),owner,{...surface,remoteId:'999'}).length,0);
@@ -30,9 +30,49 @@ test('button edits update function identity and preserve other gestures and unkn
   assert.deepEqual(buttonValue(out,change),change.value);assert.equal(identity(out,descendants(parseXml(out),'ButtonAction')[0],'FunctionId'),'602');assert.match(out,/<u:Id>action-1/);assert.match(out,/z:metadata="keep"/);assert.match(out,/<z:Extra>untouched/);assert.match(out,/<u:ActionName>Help/);assert.match(out,/<u:Sequences>vendor data/);
   assert.throws(()=>buttonPatch(doc.raw,change,[]),/missing or ambiguous/);
   assert.throws(()=>buttonPatch(out,change,[{name:'PowerOff'}]),/changed/);
-  assert.throws(()=>buttonDraft({...base,field:'long',value:null},s,[map]),/system action/);
+  const cleared=buttonDraft({...base,field:'long',value:null},s,[map]);assert.equal(buttonValue(buttonPatch(doc.raw,cleared),cleared),null);
   assert.throws(()=>buttonDraft({...base,value:null},s,[map]),/primary button/);
   assert.throws(()=>buttonDraft({...base,value:{kind:'command',deviceId:'999',command:'Home'}},s,[map]),/device in this map/);
+});
+
+test('adding a physical button requires its remote catalog, preserves the map and reads back after ID allocation',()=>{
+  const {doc,map,s,base}=fixture(),canvas=canvasDocuments(buttonXml().replace('<u:ButtonKey>Power</u:ButtonKey>','<u:ButtonKey>Menu</u:ButtonKey>'));
+  const catalog={ownerKind:'activity',ownerId:'401',remoteId:'800',skinId:'104',buttons:canvas.map(d=>d.button)};
+  const input={...base,field:'add',button:{key:'Menu'},value:{kind:'command',deviceId:'101',command:'PowerOff'}};
+  assert.throws(()=>buttonDraft(input,s,[map]),/catalog/);
+  assert.throws(()=>buttonDraft(input,s,[map],{...catalog,remoteId:'wrong'}),/catalog/);
+  const change=buttonDraft(input,s,[map],catalog),out=buttonPatch(doc.raw,change,[{name:'PowerOff',functionId:'602'}],canvas);
+  assert.equal(mapView({raw:out,target:map.target},owner).buttons.length,2);assert.deepEqual(buttonValue(out,change),change.value);
+  assert.deepEqual(buttonValue(out.replace('<u:ButtonId>0</u:ButtonId>','<u:ButtonId>allocated-id</u:ButtonId>'),change),change.value);
+  assert.match(out,/<u:Sequences>vendor data/);assert.match(out,/<z:Extra>untouched/);
+  assert.throws(()=>buttonPatch(out,change,[{name:'PowerOff'}],canvas),/changed/);
+  assert.throws(()=>buttonPatch(doc.raw,change,[{name:'PowerOff'}],[]),/not available/);
+});
+
+test('system assignments accept only names reported for the same remote button and gesture',()=>{
+  const {doc,map,s,base}=fixture();
+  const xml=buttonXml().replace(/<u:ButtonAction\b[\s\S]*?<\/u:ButtonAction>/,'<u:ButtonAction i:type="u:ButtonClientAction"><u:EventType>0</u:EventType><u:Id>0</u:Id><u:Order>0</u:Order><u:ActionName>Help</u:ActionName></u:ButtonAction>');
+  const canvas=canvasDocuments(xml),catalog={ownerKind:'activity',ownerId:'401',remoteId:'800',skinId:'104',buttons:canvas.map(d=>d.button)},input={...base,value:{kind:'system',name:'Help'}};
+  assert.throws(()=>buttonDraft(input,s,[map]),/remote catalog/);
+  const change=buttonDraft(input,s,[map],catalog),out=buttonPatch(doc.raw,change,[],canvas);
+  assert.deepEqual(buttonValue(out,change),change.value);
+  assert.throws(()=>buttonPatch(doc.raw,change,[],[]),/remote catalog/);
+  assert.throws(()=>buttonDraft({...input,value:{kind:'system',name:'UnverifiedAction'}},s,[map],catalog),/remote catalog/);
+  assert.throws(()=>buttonDraft({...input,field:'double'},s,[map],catalog),/remote catalog/);
+  assert.match(out,/<u:ButtonLongPressAction/);assert.match(out,/<u:Sequences>vendor data/);
+});
+
+test('touchscreen edits preserve actions and icons, escape labels and reorder only existing positions in a menu',()=>{
+  const {doc,map,s,base}=fixture();
+  const soft=(id,label,position)=>`<u:AbstractRemoteButton i:type="u:SoftRemoteButton" z:future="keep"><u:ButtonAction i:type="u:ButtonCommandAction"><u:CommandName>PowerOn</u:CommandName>${'<u:DeviceId><c:Value>101</c:Value></u:DeviceId>'}</u:ButtonAction><u:ButtonId>${id}</u:ButtonId><u:ButtonImageKey>keep-icon</u:ButtonImageKey><u:MenuItem><u:IndexInMenu>${position}</u:IndexInMenu><u:MenuName>Main</u:MenuName></u:MenuItem><u:TextOnRemote>${label}</u:TextOnRemote></u:AbstractRemoteButton>`;
+  const raw=doc.raw.replace('</u:Buttons>',soft('soft-1','TV',1)+soft('soft-2','Movies',2)+'</u:Buttons>'),view=mapView({...doc,raw},owner),next=structuredClone(view.layout);
+  next[0].label='TV & games';next[0].position=2;next[1].position=1;
+  const change=buttonDraft({...base,field:'layout',value:next},s,[view]),out=buttonPatch(raw,change);
+  assert.deepEqual(buttonValue(out,change),change.value);assert.match(out,/TV &amp; games/);assert.match(out,/<u:ButtonImageKey>keep-icon/);assert.match(out,/z:future="keep"/);assert.match(out,/<u:Sequences>vendor data/);
+  const bad=structuredClone(next);bad[1].position=2;assert.throws(()=>buttonDraft({...base,field:'layout',value:bad},s,[view]),/existing positions/);
+  bad[1].position=1;bad[1].menu='New';assert.throws(()=>buttonDraft({...base,field:'layout',value:bad},s,[view]),/current menu/);
+  assert.throws(()=>buttonDraft({...base,field:'layout',value:[]},s,[view]),/layout/);
+  assert.equal(map.layout,null);
 });
 test('optional unassigned gestures can receive commands without changing the primary action',()=>{
   const {doc,map,s,base}=fixture(),change=buttonDraft({...base,field:'double',value:{kind:'command',deviceId:'102',command:'Home'}},s,[map]);

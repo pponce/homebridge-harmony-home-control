@@ -73,7 +73,7 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
     catch (error) { try { await load(); } catch {} throw error; }
     finally { localBusy = false; updateToolbar(); schedulePoll(); }
   }
-  function updateToolbar() { $('read').disabled = !data || localBusy || data.busy; $('hub').disabled = !data || localBusy || data.busy; $('export').disabled = !data?.snapshot; }
+  function updateToolbar() { $('read').disabled = !data || localBusy || data.busy; $('hub').disabled = !data || localBusy || data.busy; $('export').disabled = !data?.snapshot;for(const b of document.querySelectorAll('[data-cloud-read-button]')) b.disabled=localBusy || data?.busy || b.dataset.cloudReadAllowed!=='true'; }
   function unsaved() { return !contextDirty || window.confirm('Discard your unsaved Setup Assistant answers?'); }
   function navigate(next) { if (!unsaved()) return; contextDirty = false; view = next; render(); }
   function render() {
@@ -179,10 +179,11 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
     const ready=data.cloud.saved || data.cloud.connected && data.cloud.host===data.host;
     const key=JSON.stringify([data.host,path,owner.kind,owner.id]), state=cloudReads.get(key), status=e('p',undefined,'cloud-read-status');
     status.dataset.cloudRead=key;status.tabIndex=-1;status.setAttribute('role',state?.error ? 'alert' : 'status');
-    const loaded=path==='ir-codes' ? data.cloud.codes?.deviceId===owner.id : data.cloud.mapOwner?.kind===owner.kind && data.cloud.mapOwner.id===owner.id;
+    const loaded=path==='ir-codes' ? data.cloud.codes?.deviceId===owner.id : path==='button-catalog' ? data.cloud.buttonCatalog?.ownerKind===owner.kind && data.cloud.buttonCatalog.ownerId===owner.id : data.cloud.mapOwner?.kind===owner.kind && data.cloud.mapOwner.id===owner.id;
     status.textContent=state?.error ? `${state.error}${loaded ? ' Showing the previously loaded data.' : ''}` : state?.loading ? 'Loading from Logitech…' : loaded ? 'Loaded from Logitech.' : !data.cloud.loginAvailable ? 'Open this page over HTTPS or through localhost to load Logitech data.' : !ready ? 'Save your Logitech login in Review changes to load this data.' : data.busy || localBusy ? 'Wait for the current operation to finish.' : '';
     status.hidden=!status.textContent;if(state?.error) status.classList.add('error');
     const b=e('button',state?.loading ? 'Loading…' : label);b.type='button';
+    b.dataset.cloudReadButton='true';b.dataset.cloudReadAllowed=String(!!ready && data.cloud.loginAvailable);
     b.disabled=!ready || !data.cloud.loginAvailable || data.busy || localBusy;
     b.onclick=async()=>{
       if(localBusy || data.busy) return;
@@ -209,9 +210,19 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
     const loaded=data.cloud.mapOwner?.kind===owner.kind && data.cloud.mapOwner.id===owner.id;
     if(loaded) {
       const cloudMaps=data.cloud.maps;
+      if(cloudMaps.length) cloudReadButton(card,'Load remote button catalog','button-catalog',owner);
+      const catalog=data.cloud.buttonCatalog?.ownerKind===owner.kind && data.cloud.buttonCatalog.ownerId===owner.id ? data.cloud.buttonCatalog : null;
       if(!cloudMaps.length) card.append(note('Logitech supplied no editable maps for this device or activity. Use Harmony button customization.'));
       for(const [index,map] of cloudMaps.entries()) {
         const block=e('div');
+        if(map.layout) block.append(button('Edit touchscreen labels & order',()=>editTouchscreen(owner,map)));
+        if(catalog && catalog.remoteId===map.target.remoteId && catalog.skinId===map.target.skinId) {
+          const available=catalog.buttons.filter(b=>b.type==='HardRemoteButton' && !map.buttons.some(existing=>existing.type==='HardRemoteButton' && existing.key===b.key));
+          if(available.length) {
+            const choice=select([['','Choose a button'],...available.map(b=>[b.key,b.label || b.key])],'');field(block,'Available button',choice);
+            const add=button('Add button assignment',()=>editButtonMap(owner,map,available.find(b=>b.key===choice.value),'add'));add.disabled=true;choice.onchange=()=>{add.disabled=!choice.value;};block.append(add);
+          } else block.append(p('All physical buttons supplied by this catalog are already assigned.'));
+        }
         block.append(table(['Button','Gesture','Assignment',''],map.buttons.flatMap(b=>Object.entries({press:'Short press',long:'Long press',double:'Double press'}).map(([gesture,label])=> {
           const action=b[gesture], name=b.label || b.key || b.id || 'Unidentified button';
           const editable=['HardRemoteButton','SoftRemoteButton'].includes(b.type) && (b.key || b.id) && action?.kind!=='unsupported';
@@ -221,7 +232,7 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
         }))));
         const surface=details(`Remote surface ${map.target.surfaceId}${map.target.mapId ? ` · map ${map.target.mapId}` : ''}`,block,helpText['Button map']);surface.querySelector('details').open=index===0;card.append(surface);
       }
-      card.append(p('To add buttons, change touchscreen layout, or edit named sequences and system actions, use Harmony button customization. Gesture support depends on the remote.'));
+      card.append(p('Load the remote button catalog to add physical-button assignments and see available system actions. Touchscreen editors appear when the map supplies identified buttons and menu positions. Named sequences and unsupported action formats use Harmony. Check button gestures and screen changes on the remote after syncing.'));
     } else {
       if (!maps.length) card.append(p('No matching button map was supplied by the hub.'));
       if(maps.length) card.append(p('Assignments from the most recent Read hub.'));
@@ -237,20 +248,37 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
     }
     parent.append(card);
   }
+  function editTouchscreen(owner,map) {
+    const rows=structuredClone(map.layout),block=e('div'),list=e('div');block.append(p('Edit labels and move buttons within their current menu.'),list);
+    const draw=()=>{
+      list.replaceChildren();rows.sort((a,b)=>a.menu.localeCompare(b.menu)||a.position-b.position);
+      for(const row of rows) {
+        const group=rows.filter(r=>r.menu===row.menu),index=group.indexOf(row),line=e('div',undefined,'sequence-row'),label=e('input');label.value=row.label;label.required=true;label.maxLength=64;label.oninput=()=>{row.label=label.value;};
+        line.append(p(`${row.menu} · position ${row.position}`));field(line,`Label for ${row.button.id}`,label);
+        for(const [direction,offset] of [['up',-1],['down',1]]) {const move=button(`Move ${direction}`,()=>{const other=group[index+offset];[row.position,other.position]=[other.position,row.position];draw();});move.disabled=!group[index+offset];move.setAttribute('aria-label',`Move ${direction} touchscreen button ${row.button.id}`);line.append(move);}
+        list.append(line);
+      }
+    };
+    draw();const revision=data.revision,version=data.snapshot.version;
+    showEditor('Touchscreen labels & order',[block],'Save draft',async()=>{await mutate('draft',{revision,change:{kind:'button',id:owner.id,ownerKind:owner.kind,field:'layout',mapTarget:map.target,value:rows,version}});view='changes';render();});
+  }
   function editButtonMap(owner,map,b,gesture) {
-    const item=(owner.kind==='device'?data.snapshot.devices:data.snapshot.activities).find(d=>d.id===owner.id), before=b[gesture];
+    const item=(owner.kind==='device'?data.snapshot.devices:data.snapshot.activities).find(d=>d.id===owner.id), before=gesture==='add'?null:b[gesture];
     const devices=data.snapshot.devices.filter(d=>owner.kind==='device'?d.id===owner.id:item.roles.some(r=>r.deviceId===d.id));
-    const block=e('div'), controls=e('div'), kind=select([...(gesture==='press'?[]:[['none','Unassigned']]),...(!before || before.kind==='command' ? [['command','Device command']] : []),...(!before || before.kind==='channel' ? [['channel','Channel number']] : [])],before?.kind || (gesture==='press'?'command':'none'));
-    field(block,'Assignment type',kind);block.append(controls);let device,command,channel;
+    const catalog=data.cloud.buttonCatalog, catalogButtons=catalog?.ownerKind===owner.kind && catalog.ownerId===owner.id && catalog.remoteId===map.target.remoteId && catalog.skinId===map.target.skinId ? catalog.buttons : [];
+    const sourceGesture=gesture==='add'?'press':gesture,systemNames=[...new Set([b[sourceGesture],...catalogButtons.filter(c=>c.key===b.key && c.type===b.type).map(c=>c[sourceGesture])].filter(a=>a?.kind==='system').map(a=>a.name))];
+    const primary=['press','add'].includes(gesture),block=e('div'), controls=e('div'), kind=select([...(primary?[]:[['none','Unassigned']]),['command','Device command'],['channel','Channel number'],...(systemNames.length?[['system','Remote system action']]:[])],before?.kind || (primary?'command':'none'));
+    field(block,'Assignment type',kind);block.append(controls);let device,command,channel,system;
     const draw=()=>{
       controls.replaceChildren();if(kind.value==='none') return;
+      if(kind.value==='system') {system=select(systemNames.map(n=>[n,n]),before?.name || systemNames[0]);field(controls,'System action',system);return;}
       device=select([['','Choose a device'],...devices.map(d=>[d.id,d.name])],before?.deviceId || (devices.length===1?devices[0].id:''));device.required=true;field(controls,'Device',device);
       if(kind.value==='command') {command=select([]);command.required=true;const update=()=>{command.replaceChildren(...select([['','Choose a command'],...(devices.find(d=>d.id===device.value)?.commands || []).map(c=>[c,c])],before?.command || '').children);};device.onchange=update;update();field(controls,'Command',command);}
       else {channel=e('input');channel.required=true;channel.maxLength=12;channel.pattern='[0-9.\\-]+';channel.value=before?.channel || '';field(controls,'Channel number',channel);}
     };
     kind.onchange=draw;draw();const revision=data.revision,version=data.snapshot.version;
-    showEditor(`${b.label || b.key || b.id} · ${{press:'Short press',long:'Long press',double:'Double press'}[gesture]}`,[block],'Save draft',async()=>{
-      const value=kind.value==='none'?null:{kind:kind.value,deviceId:device.value,...(kind.value==='command'?{command:command.value}:{channel:channel.value})};
+    showEditor(`${b.label || b.key || b.id} · ${{press:'Short press',long:'Long press',double:'Double press',add:'Add assignment'}[gesture]}`,[block],'Save draft',async()=>{
+      const value=kind.value==='none'?null:kind.value==='system'?{kind:'system',name:system.value}:{kind:kind.value,deviceId:device.value,...(kind.value==='command'?{command:command.value}:{channel:channel.value})};
       await mutate('draft',{revision,change:{kind:'button',id:owner.id,ownerKind:owner.kind,field:gesture,button:{key:b.key,id:b.id,type:b.type},mapTarget:map.target,value,version}});view='changes';render();
     });
   }

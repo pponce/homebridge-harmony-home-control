@@ -36,7 +36,7 @@ export const roleFields = {
   nextDeviceDelay: { label:'Delay before next device (ms)', type:'number', min:0, max:60000, help:'Next delay (ms)', guide:'role' },
 };
 export function settingSpec(change) {
-  if(change.kind==='button') return ['press','long','double'].includes(change.field) ? {type:'button-action',label:'Button assignment',guide:'buttons'} : null;
+  if(change.kind==='button') return ['press','long','double','add','layout'].includes(change.field) ? {type:'button-action',label:'Button assignment',guide:'buttons'} : null;
   const fields = change.kind === 'device' ? deviceFields : change.role !== undefined ? roleFields : activityFields;
   return Object.hasOwn(fields,change.field) ? fields[change.field] : null;
 }
@@ -87,7 +87,7 @@ export function inputMethodLabel(value) {
   return label ? `${label} (code ${value})` : /^\d+$/.test(String(value)) ? `Reported method code ${value}` : value;
 }
 export function formatDraftValue(change,value) {
-  if(change.kind==='button') return value===null ? 'Unassigned' : value.kind==='command' ? `${value.command} · device ${value.deviceId}` : value.kind==='channel' ? `Channel ${value.channel} · device ${value.deviceId}` : `System action: ${value.type}`;
+  if(change.kind==='button') return change.field==='layout' ? (value || []).map(v=>`${v.menu} · ${v.position}: ${v.label}`).join('\n') : value===null ? 'Unassigned' : value.kind==='command' ? `${value.command} · device ${value.deviceId}` : value.kind==='channel' ? `Channel ${value.channel} · device ${value.deviceId}` : value.kind==='system' ? `System action: ${value.name}` : `Unsupported action: ${value.type}`;
   if (value == null || value === '') return 'Not supplied';
   if (Array.isArray(value)) return value.length ? value.map((v,i) => `${i+1}. ${typeof v === 'string' ? v : v.kind === 'command' ? `${v.command}${v.deviceId ? ` · device ${v.deviceId}` : ''}${v.duration == null ? '' : ` (hold ${v.duration} ms)`}` : v.kind === 'delay' ? `Wait ${v.delay} ms` : `Unsupported action: ${v.type}`}`).join('\n') : 'No actions';
   const spec = settingSpec(change), label = spec?.options?.find(([v]) => v === value)?.[1];

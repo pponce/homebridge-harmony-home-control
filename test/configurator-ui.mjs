@@ -12,6 +12,8 @@ const directory=await mkdtemp(join(artifacts,'configurator-ui-')), imported=nati
 let mapLoadMode='success',irLoadMode='success',releaseRead,readStarted;
 imported.resources.MapList.ButtonMaps.push({'Id-':502,'DeviceId-':101,Buttons:[{TextOnRemote:'Receiver power',ButtonId:'soft-1',ButtonAction:{__type:'ButtonCommandAction',CommandName:'PowerOn',DeviceId:{Value:101}}},{ButtonId:'help',ButtonAction:{__type:'ButtonClientAction',ActionName:'Help'}}],Sequences:[]});
 const cloudButton={key:'Power',id:'button-1',type:'HardRemoteButton',label:'',group:'Power',press:{kind:'command',deviceId:'101',command:'PowerOn'},long:null,double:null};
+const addedButtons=[];
+let cloudLayout=[{button:{key:'',id:'soft-1',type:'SoftRemoteButton'},label:'TV',menu:'Commands',position:1},{button:{key:'',id:'soft-2',type:'SoftRemoteButton'},label:'Movies',menu:'Commands',position:2}];
 const server=new ConfiguratorServer({directory,config:{...normalizeConfig(),advertiseAddress:'127.0.0.1',harmonyHubAddresses:[imported.host],configuratorPort:0},
   reader:{read:async()=>{if(offline)throw new ConfiguratorError('The test hub is offline.',502);return structuredClone(imported);},close(){}},
   cloudFactory:()=>({target:null,async login(email,password,target){assert.equal(email,'fake@example.invalid');assert.equal(password,'fake-password');this.target=target;},async preview(change){return {before:change.before ?? 1200,fingerprint:'browser-review'};},async apply(change,submitted){submitted();pending=change;},async sync(progress){
@@ -22,11 +24,11 @@ const server=new ConfiguratorServer({directory,config:{...normalizeConfig(),adve
       else if(['enter','leave'].includes(pending.field)) activity[pending.field==='enter'?'EnterActions':'LeaveActions']=pending.value.map((a,i)=>a.kind==='command'?{__type:'CommandActivityAction',CommandName:a.command,'DeviceId-':a.deviceId,ActionOrder:i}:{__type:'DelayActivityAction',Duration:a.delay,ActionOrder:i});
       else if(pending.field==='input') activity.Roles[pending.role].SelectedInput={Name:pending.value};
     }
-    else if(pending.kind==='button') cloudButton[pending.field]=pending.value;
+    else if(pending.kind==='button') {if(pending.field==='layout')cloudLayout=structuredClone(pending.value);else if(pending.field==='add')addedButtons.push({...pending.button,label:'',group:'',press:pending.value,long:null,double:null});else cloudButton[pending.field]=pending.value;}
     else if(pending.field==='delays.powerOn') imported.resources.DeviceList.DevicesWithFeatures[0].DeviceFeatures[0].PowerOnDelay=pending.value;
     else if(pending.field==='inputCommands') imported.resources.DeviceList.DevicesWithFeatures[0].DeviceFeatures[1].Inputs.find(i=>i.InputName===pending.inputName).Actions=pending.value.map((a,i)=>a.kind==='command'?{__type:'IRPressAction',IRCommandName:a.command,Duration:a.duration,Order:i+1}:{__type:'IRDelayAction',Delay:a.delay,Order:i+1});
     pending=null;
-  },async buttonMaps(owner){if(mapLoadMode==='error')throw new ConfiguratorError('Logitech rejected GetButtonMaps. The requested data could not be loaded.',502);if(mapLoadMode==='empty')return [];return [{ownerKind:owner.kind,ownerId:owner.id,target:{remoteId:'800',skinId:'104',surfaceId:'7',mapId:'501',identifier:''},buttons:[structuredClone(cloudButton)]}];},async infraredCodes(){if(irLoadMode==='delay')await new Promise(resolve=>{releaseRead=resolve;readStarted();});if(irLoadMode==='empty')return [];return [{name:'PowerOn',raw:'0000 006D 0002',protocolId:'9',transport:'1'},{name:'PowerOff',raw:null,protocolId:'9',transport:'1'}];},close(){this.target=null;}})
+  },async buttonMaps(owner){if(mapLoadMode==='error')throw new ConfiguratorError('Logitech rejected GetButtonMaps. The requested data could not be loaded.',502);if(mapLoadMode==='empty')return [];return [{ownerKind:owner.kind,ownerId:owner.id,target:{remoteId:'800',skinId:'104',surfaceId:'7',mapId:'501',identifier:''},buttons:[structuredClone(cloudButton),...structuredClone(addedButtons),...cloudLayout.map(r=>({...r.button,label:r.label,group:'',press:{kind:'command',deviceId:'101',command:'PowerOn'},long:null,double:null}))],layout:structuredClone(cloudLayout)}];},async buttonCatalog(owner){return {ownerKind:owner.kind,ownerId:owner.id,remoteId:'800',skinId:'104',buttons:[{...cloudButton,press:{kind:'system',name:'Help'}},{key:'Menu',id:'0',type:'HardRemoteButton',label:'',group:'Navigation',press:null,long:null,double:null}]};},async infraredCodes(){if(irLoadMode==='delay')await new Promise(resolve=>{releaseRead=resolve;readStarted();});if(irLoadMode==='empty')return [];return [{name:'PowerOn',raw:'0000 006D 0002',protocolId:'9',transport:'1'},{name:'PowerOff',raw:null,protocolId:'9',transport:'1'}];},close(){this.target=null;}})
 });
 await server.start();
 await server.setPassword('browser-test-password','testuser');
@@ -213,6 +215,19 @@ try {
   await buttonChange.getByRole('button',{name:'Review cloud save',exact:true}).click();await page.getByRole('button',{name:'Save to Logitech',exact:true}).click();
   await page.getByRole('button',{name:'Compile & sync this hub',exact:true}).click();await buttonChange.getByText('Synced · check the remote',{exact:true}).waitFor({timeout:12000});
   await buttonChange.getByRole('button',{name:'I verified this on the remote',exact:true}).click();await buttonChange.getByText('Confirmed on remote',{exact:true}).waitFor();
+  await page.getByRole('button',{name:/^Activities/}).click();await page.getByRole('button',{name:'Load cloud button maps',exact:true}).click();
+  await page.getByRole('button',{name:'Load remote button catalog',exact:true}).click();await page.getByLabel('Available button',{exact:true}).selectOption('Menu');
+  await page.getByRole('button',{name:'Add button assignment',exact:true}).click();await page.getByLabel('Device',{exact:true}).selectOption('101');await page.getByLabel('Command',{exact:true}).selectOption('PowerOn');
+  await page.getByRole('button',{name:'Save draft',exact:true}).click();
+  const finishButton=async title=>{const card=page.locator('section.panel').filter({has:page.getByRole('heading',{name:title,exact:true})});await card.getByRole('button',{name:'Review cloud save',exact:true}).click();await page.getByRole('button',{name:'Save to Logitech',exact:true}).click();await page.getByRole('button',{name:'Compile & sync this hub',exact:true}).click();await card.getByText('Synced · check the remote',{exact:true}).waitFor({timeout:12000});await card.getByRole('button',{name:'I verified this on the remote',exact:true}).click();};
+  await finishButton('Play <game> · Menu · Add assignment');
+  await page.getByRole('button',{name:/^Activities/}).click();await page.getByRole('button',{name:'Load cloud button maps',exact:true}).click();await page.getByRole('button',{name:'Edit Menu short press',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Edit Power short press',exact:true}).click();await page.getByLabel('Assignment type',{exact:true}).selectOption('system');await page.getByLabel('System action',{exact:true}).selectOption('Help');await page.getByRole('button',{name:'Save draft',exact:true}).click();
+  await finishButton('Play <game> · Power · Short press');
+  await page.getByRole('button',{name:/^Activities/}).click();await page.getByRole('button',{name:'Load cloud button maps',exact:true}).click();await page.getByText('System action: Help',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Edit touchscreen labels & order',exact:true}).click();await page.getByLabel('Label for soft-1',{exact:true}).fill('TV & games');await page.getByRole('button',{name:'Move down touchscreen button soft-1',exact:true}).click();
+  assert.deepEqual(await page.locator('#editor input').evaluateAll(nodes=>nodes.map(n=>n.value)),['Movies','TV & games']);await page.getByRole('button',{name:'Save draft',exact:true}).click();
+  await finishButton('Play <game> · Touchscreen labels and order');
   await page.waitForFunction(()=>!document.getElementById('read').disabled);
   await page.getByRole('button',{name:/^Devices/}).click();irLoadMode='empty';await page.getByRole('button',{name:'Load IR codes',exact:true}).click();
   await page.getByText('Logitech returned no commands for this device.',{exact:true}).waitFor();
