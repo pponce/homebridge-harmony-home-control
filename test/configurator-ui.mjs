@@ -273,7 +273,8 @@ try {
   await page.locator('summary').filter({hasText:/^Menu$/}).click();assert.equal(await page.getByLabel('Harmony keycode for Menu',{exact:true}).inputValue(),'opaque-keycode');await page.getByText('Hexadecimal and binary views are unavailable for this keycode format.',{exact:true}).waitFor();
   const keycode=page.getByLabel('Harmony keycode for PowerOn',{exact:true}),raw=page.getByLabel('Raw data for PowerOff',{exact:true});
   for(const field of [keycode,hex,binary,raw]) {
-    assert.ok(await field.evaluate(node=>{const label=node.closest('dd').previousElementSibling.getBoundingClientRect(),input=node.getBoundingClientRect(),copy=node.nextElementSibling.getBoundingClientRect();return Math.abs(label.y+label.height/2-input.y-input.height/2)<1 && Math.abs(copy.y+copy.height/2-input.y-input.height/2)<1;}));
+    const geometry=await field.evaluate(node=>{const label=node.closest('dd').previousElementSibling.getBoundingClientRect(),input=node.getBoundingClientRect(),copy=node.nextElementSibling.getBoundingClientRect();return {name:node.getAttribute('aria-label'),label:label.toJSON(),input:input.toJSON(),copy:copy.toJSON(),labelOffset:label.y+label.height/2-input.y-input.height/2,copyOffset:copy.y+copy.height/2-input.y-input.height/2};});
+    assert.ok(Math.abs(geometry.labelOffset)<1 && Math.abs(geometry.copyOffset)<1,JSON.stringify(geometry));
   }
   assert.ok(Math.abs((await keycode.boundingBox()).x-(await hex.boundingBox()).x)<1);assert.ok(await raw.evaluate(n=>n.scrollWidth>n.clientWidth));
   assert.ok(await irSection.evaluate(n=>{const item=n.parentElement.querySelector('.ir-metadata>div'),label=item.querySelector('dt').getBoundingClientRect(),value=item.querySelector('dd').getBoundingClientRect();return Math.abs(label.y+label.height/2-value.y-value.height/2)<1;}));

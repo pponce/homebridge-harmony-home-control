@@ -46,8 +46,8 @@ button.field-help-button:focus-visible{outline:2px solid var(--accent)}
 
 .sequence-row{min-width:0;margin:12px 0;padding:14px;border:1px solid var(--line);border-radius:10px}
 .sequence-row legend{padding:0 5px;font-weight:600;font-size:13px}
-.ir-data{display:grid;grid-template-columns:150px minmax(0,1fr);align-items:start;gap:6px 12px;margin:10px 0;font-size:12px}
-.ir-data dt{display:flex;align-items:center;min-height:34px;font-weight:600}.ir-data dd{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px;margin:0;min-width:0}
+.ir-data{display:grid;grid-template-columns:150px minmax(0,1fr);align-items:center;gap:6px 12px;margin:10px 0;font-size:12px}
+.ir-data dt{display:flex;align-items:center;min-height:34px;margin:0;font-weight:600}.ir-data dd{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px;margin:0;min-width:0}
 .ir-value{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;line-height:1.5;height:34px;min-height:34px;padding:5px 8px;min-width:0;outline-offset:3px}
 .ir-copy{height:34px;min-height:34px;min-width:66px;padding:5px 9px;font-size:12px}
 .ir-copy-status{grid-column:1/-1;font-size:11px;color:var(--muted)}
