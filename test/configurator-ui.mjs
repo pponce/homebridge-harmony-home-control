@@ -14,9 +14,10 @@ imported.resources.MapList.ButtonMaps.push({'Id-':502,'DeviceId-':101,Buttons:[{
 const cloudButton={key:'Power',id:'button-1',type:'HardRemoteButton',label:'',group:'Power',press:{kind:'command',deviceId:'101',command:'PowerOn'},long:null,double:null};
 const addedButtons=[];
 const irKeyCode='G:Toshiba 32 Bit:(0xA156F609)(Repeat)():3';
+const irRaw='\n'+Array(12).fill('0000 006D 0002').join('\n')+'\n';
 const irCodes=[
   {name:'PowerOn',raw:null,rawState:'not-supplied',keyCode:irKeyCode,keyCodeState:'supplied',protocolId:'9',transport:'32',learned:false},
-  {name:'PowerOff',raw:'\n0000 006D 0002\n',rawState:'supplied',keyCode:null,keyCodeState:'not-supplied',protocolId:'9',transport:'1',learned:true},
+  {name:'PowerOff',raw:irRaw,rawState:'supplied',keyCode:null,keyCodeState:'not-supplied',protocolId:'9',transport:'1',learned:true},
   {name:'Menu',raw:null,rawState:'not-supplied',keyCode:'opaque-keycode',keyCodeState:'supplied',protocolId:'9',transport:'1',learned:null}
 ];
 async function mockInfraredCodes() {
@@ -49,6 +50,7 @@ await server.setPassword('browser-test-password','testuser');
 const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
 try {
   const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.context().grantPermissions(['clipboard-read','clipboard-write'],{origin:server.origin});
   await page.goto(server.origin);
   await page.getByRole('button',{name:'Help for Configurator username',exact:true}).click();
   assert.match(await page.locator('#field-help-text').textContent(),/local website username/);
@@ -263,12 +265,25 @@ try {
   irLoadMode='delay';const started=new Promise(resolve=>{readStarted=resolve;});await page.getByRole('button',{name:'Refresh IR codes',exact:true}).click();await page.getByText('Loading from Logitech…',{exact:true}).waitFor();await started;
   assert.equal(await page.getByRole('button',{name:'Loading…',exact:true}).isDisabled(),true);releaseRead();irLoadMode='success';
   await page.getByText('3 of 3 commands include code data.',{exact:true}).waitFor();
-  assert.equal(await page.getByLabel('Harmony keycode for PowerOn',{exact:true}).isVisible(),true);assert.equal(await page.getByLabel('Harmony keycode for PowerOn',{exact:true}).textContent(),irKeyCode);
+  assert.equal(await page.getByLabel('Harmony keycode for PowerOn',{exact:true}).isVisible(),true);assert.equal(await page.getByLabel('Harmony keycode for PowerOn',{exact:true}).inputValue(),irKeyCode);
   const hex=page.getByLabel('Hexadecimal for PowerOn (Start, segment 0, value 1)',{exact:true}),binary=page.getByLabel('Binary for PowerOn (Start, segment 0, value 1)',{exact:true});
-  assert.equal(await hex.isVisible(),true);assert.equal(await hex.textContent(),'A1 56 F6 09');assert.equal(await binary.textContent(),'10100001 01010110 11110110 00001001');assert.equal(await hex.evaluate(n=>n.tagName==='CODE'),true);assert.equal(await binary.evaluate(n=>n.tagName==='CODE'),true);
+  assert.equal(await hex.isVisible(),true);assert.equal(await hex.inputValue(),'A1 56 F6 09');assert.equal(await binary.inputValue(),'10100001 01010110 11110110 00001001');assert.equal(await hex.evaluate(n=>n.tagName==='INPUT' && n.readOnly && n.type==='text'),true);assert.equal(await binary.evaluate(n=>n.tagName==='INPUT' && n.readOnly && n.type==='text'),true);
   assert.equal(await irSection.evaluate(n=>n.parentElement.querySelectorAll('textarea').length),0);assert.ok((await hex.boundingBox()).height<40);assert.ok((await binary.boundingBox()).height<40);
-  await page.locator('summary').filter({hasText:/^PowerOff$/}).click();assert.equal(await page.getByLabel('Raw data for PowerOff',{exact:true}).textContent(),'\n0000 006D 0002\n');
-  await page.locator('summary').filter({hasText:/^Menu$/}).click();assert.equal(await page.getByLabel('Harmony keycode for Menu',{exact:true}).textContent(),'opaque-keycode');await page.getByText('Hexadecimal and binary views are unavailable for this keycode format.',{exact:true}).waitFor();
+  await page.locator('summary').filter({hasText:/^PowerOff$/}).click();assert.equal(await page.getByLabel('Raw data for PowerOff',{exact:true}).inputValue(),irRaw.replace(/\n/g,' '));
+  await page.locator('summary').filter({hasText:/^Menu$/}).click();assert.equal(await page.getByLabel('Harmony keycode for Menu',{exact:true}).inputValue(),'opaque-keycode');await page.getByText('Hexadecimal and binary views are unavailable for this keycode format.',{exact:true}).waitFor();
+  const keycode=page.getByLabel('Harmony keycode for PowerOn',{exact:true}),raw=page.getByLabel('Raw data for PowerOff',{exact:true});
+  for(const field of [keycode,hex,binary,raw]) {
+    assert.ok(await field.evaluate(node=>{const label=node.closest('dd').previousElementSibling.getBoundingClientRect(),input=node.getBoundingClientRect(),copy=node.nextElementSibling.getBoundingClientRect();return Math.abs(label.y+label.height/2-input.y-input.height/2)<1 && Math.abs(copy.y+copy.height/2-input.y-input.height/2)<1;}));
+  }
+  assert.ok(Math.abs((await keycode.boundingBox()).x-(await hex.boundingBox()).x)<1);assert.ok(await raw.evaluate(n=>n.scrollWidth>n.clientWidth));
+  assert.ok(await irSection.evaluate(n=>{const item=n.parentElement.querySelector('.ir-metadata>div'),label=item.querySelector('dt').getBoundingClientRect(),value=item.querySelector('dd').getBoundingClientRect();return Math.abs(label.y+label.height/2-value.y-value.height/2)<1;}));
+  for(const [name,value] of [['Harmony keycode for PowerOn',irKeyCode],['Hexadecimal for PowerOn (Start, segment 0, value 1)','A1 56 F6 09'],['Binary for PowerOn (Start, segment 0, value 1)','10100001 01010110 11110110 00001001'],['Raw data for PowerOff',irRaw]]) {
+    await page.getByRole('button',{name:`Copy ${name}`,exact:true}).click();await page.getByRole('button',{name:`Copied ${name}`,exact:true}).waitFor();assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),value);
+  }
+  await page.evaluate(()=>Object.defineProperty(navigator.clipboard,'writeText',{configurable:true,value:async()=>{throw new Error('Clipboard blocked for test');}}));
+  await page.getByRole('button',{name:'Copy Harmony keycode for Menu',exact:true}).click();await page.getByText('Clipboard access is unavailable. The field is selected for manual copying.',{exact:true}).waitFor();
+  assert.ok(await page.getByLabel('Harmony keycode for Menu',{exact:true}).evaluate(n=>document.activeElement===n && n.selectionStart===0 && n.selectionEnd===n.value.length));
+  await page.evaluate(()=>delete navigator.clipboard.writeText);await page.getByRole('button',{name:'Copy Harmony keycode for Menu',exact:true}).click();await page.getByRole('button',{name:'Copied Harmony keycode for Menu',exact:true}).waitFor();assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'opaque-keycode');
   const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Export command data (JSON)',exact:true}).click();const download=await downloadPromise;
   assert.equal(download.suggestedFilename(),'harmony-command-codes-101.json');const exported=JSON.parse(await readFile(await download.path(),'utf8'));assert.equal(exported.format,'harmony-command-code-export');assert.deepEqual(exported.device,{id:'101',name:'Living room display'});assert.deepEqual(exported.commands,irCodes);
   await irSection.click();assert.equal(await hex.isVisible(),false);assert.equal(await page.getByRole('button',{name:'Refresh IR codes',exact:true}).isVisible(),false);await irSection.click();assert.equal(await hex.isVisible(),true);
@@ -282,7 +297,7 @@ try {
   await page.unroute('**/api/ir-codes');
   const cachedReads=irReads;
   await page.reload();await page.getByRole('heading',{name:'Living room display'}).waitFor();
-  assert.equal(await irSection.evaluate(n=>n.parentElement.open),false);await irSection.click();assert.equal(await hex.textContent(),'A1 56 F6 09');assert.equal(irReads,cachedReads);await page.locator('.cloud-read-status').filter({hasText:/^Saved /}).waitFor();
+  assert.equal(await irSection.evaluate(n=>n.parentElement.open),false);await irSection.click();assert.equal(await hex.inputValue(),'A1 56 F6 09');assert.equal(irReads,cachedReads);await page.locator('.cloud-read-status').filter({hasText:/^Saved /}).waitFor();
   await page.getByRole('button',{name:'Setup Assistant',exact:true}).click();assert.equal(await page.getByLabel('Device type',{exact:true}).nth(1).inputValue(),'switch');
   assert.equal(await sleepMethods.getByRole('checkbox',{name:'HDMI-CEC',exact:true}).isChecked(),true);
   assert.equal(await sleepMethods.getByRole('checkbox',{name:'HomeKit / Homebridge / automation',exact:true}).isChecked(),true);
@@ -315,7 +330,7 @@ try {
   await page.goto('about:blank');
   await page.goto(server.accessLink().url);
   await page.waitForFunction(()=>!document.getElementById('read').disabled);
-  assert.equal(await irSection.evaluate(n=>n.parentElement.open),false);await irSection.click();assert.equal(await hex.textContent(),'A1 56 F6 09');assert.equal(await page.getByRole('button',{name:'Refresh IR codes',exact:true}).isDisabled(),true);assert.equal(irReads,cachedReads);
+  assert.equal(await irSection.evaluate(n=>n.parentElement.open),false);await irSection.click();assert.equal(await hex.inputValue(),'A1 56 F6 09');assert.equal(await page.getByRole('button',{name:'Refresh IR codes',exact:true}).isDisabled(),true);assert.equal(irReads,cachedReads);
   assert.deepEqual(errors,[]);
-  console.log('Configurator browser workflow passed: control settings and help; keyboard/focus and dialogs; missing-value drafts; input reorder; HDMI/ARC and power paths; cloud review/save/sync; activity actions, selected inputs and role selection; catalog-based added buttons and system actions; touchscreen labels/order; remote verification; inline cloud loading/error/empty/retry states; compact keycode/raw/hex/binary display, collapsible IR section, saved data across logins, missing code details and JSON downloads; stale read; HTML escaping; mobile and dark mode.');
+  console.log('Configurator browser workflow passed: control settings and help; keyboard/focus and dialogs; missing-value drafts; input reorder; HDMI/ARC and power paths; cloud review/save/sync; activity actions, selected inputs and role selection; catalog-based added buttons and system actions; touchscreen labels/order; remote verification; inline cloud loading/error/empty/retry states; aligned single-line IR fields, full-value clipboard copy and failure recovery, collapsible IR section, saved data across logins, missing code details and JSON downloads; stale read; HTML escaping; mobile and dark mode.');
 } finally {await browser.close();await server.close();await rm(directory,{recursive:true,force:true});}

@@ -152,7 +152,16 @@ import { settingSpec, draftValue, isInfrared, orderedInputs, powerTypeLabel, inp
   function irValues(rows) {
     const list=e('dl',undefined,'ir-data');
     for(const [label,text,name] of rows) {
-      const term=e('dt'),description=e('dd'),value=e('code',text,'ir-value');term.append(helpLabel(label));value.tabIndex=0;value.setAttribute('aria-label',name);description.append(value);list.append(term,description);
+      const term=e('dt'),description=e('dd'),value=e('input',undefined,'ir-value'),status=e('span',undefined,'ir-copy-status');
+      value.type='text';value.readOnly=true;value.value=text.replace(/\r\n|\r|\n/g,' ');value.id=`field-${++fieldSequence}`;value.setAttribute('aria-label',name);value.spellcheck=false;
+      const caption=e('label',label);caption.htmlFor=value.id;const heading=e('span',undefined,'help-label');heading.append(caption);if(helpText[label])heading.append(helpButton(label,helpText[label]));term.append(heading);
+      status.setAttribute('role','status');status.hidden=true;let reset;
+      const copy=button('Copy',async()=>{
+        clearTimeout(reset);status.hidden=true;status.textContent='';
+        try {await navigator.clipboard.writeText(text);copy.textContent='Copied';copy.setAttribute('aria-label',`Copied ${name}`);reset=setTimeout(()=>{copy.textContent='Copy';copy.setAttribute('aria-label',`Copy ${name}`);},2000);}
+        catch {value.focus();value.select();copy.textContent='Copy';copy.setAttribute('aria-label',`Copy ${name}`);status.textContent='Clipboard access is unavailable. The field is selected for manual copying.';status.hidden=false;}
+      },'ir-copy');
+      copy.setAttribute('aria-label',`Copy ${name}`);description.append(value,copy,status);list.append(term,description);
     }
     return list;
   }
