@@ -28,9 +28,11 @@ async function mockInfraredCodes() {
   return structuredClone(irCodes);
 }
 let cloudLayout=[{button:{key:'',id:'soft-1',type:'SoftRemoteButton'},label:'TV',menu:'Commands',position:1},{button:{key:'',id:'soft-2',type:'SoftRemoteButton'},label:'Movies',menu:'Commands',position:2}];
-const server=new ConfiguratorServer({directory,config:{...normalizeConfig(),advertiseAddress:'127.0.0.1',harmonyHubAddresses:[imported.host],configuratorPort:0},
+let hubSyncRequests=0;
+const server=new ConfiguratorServer({directory,syncer:{async sync(host,target){assert.equal(host,imported.host);assert.equal(target.remoteId,imported.remoteId);hubSyncRequests++;},close(){}},config:{...normalizeConfig(),advertiseAddress:'127.0.0.1',harmonyHubAddresses:[imported.host],configuratorPort:0},
   reader:{read:async()=>{if(offline)throw new ConfiguratorError('The test hub is offline.',502);return structuredClone(imported);},close(){}},
-  cloudFactory:()=>({target:null,async login(email,password,target){assert.equal(email,'fake@example.invalid');assert.equal(password,'fake-password');this.target=target;},async preview(change){return {before:change.before ?? 1200,fingerprint:'browser-review'};},async apply(change,submitted){submitted();pending=change;},async sync(progress){
+  cloudFactory:()=>({target:null,async login(email,password,target){assert.equal(email,'fake@example.invalid');assert.equal(password,'fake-password');this.target=target;},async preview(change){return {before:change.before ?? 1200,fingerprint:'browser-review'};},async apply(change,submitted){submitted();pending=change;},async sync(progress,trigger){
+    await trigger(this.target);
     progress('Waiting for the test hub');if(!pending)return;
     if(pending.kind==='activity') {
       const activity=imported.resources.ActivityList.Activities[0];
@@ -332,6 +334,7 @@ try {
   await page.goto(server.accessLink().url);
   await page.waitForFunction(()=>!document.getElementById('read').disabled);
   assert.equal(await irSection.evaluate(n=>n.parentElement.open),false);await irSection.click();assert.equal(await hex.inputValue(),'A1 56 F6 09');assert.equal(await page.getByRole('button',{name:'Refresh IR codes',exact:true}).isDisabled(),true);assert.equal(irReads,cachedReads);
+  assert.ok(hubSyncRequests>0,'Browser sync must reach the local hub sync interface');
   assert.deepEqual(errors,[]);
   console.log('Configurator browser workflow passed: control settings and help; keyboard/focus and dialogs; missing-value drafts; input reorder; HDMI/ARC and power paths; cloud review/save/sync; activity actions, selected inputs and role selection; catalog-based added buttons and system actions; touchscreen labels/order; remote verification; inline cloud loading/error/empty/retry states; aligned single-line IR fields, full-value clipboard copy and failure recovery, collapsible IR section, saved data across logins, missing code details and JSON downloads; stale read; HTML escaping; mobile and dark mode.');
 } finally {await browser.close();await server.close();await rm(directory,{recursive:true,force:true});}

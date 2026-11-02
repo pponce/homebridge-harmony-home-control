@@ -42,11 +42,13 @@ test('cloud auth exchanges tokens only with Logitech, saves a single activity, r
   await cloud.login('fake@example.invalid','fake-password',{remoteId:'800',accountId:'900'});
   const change=draftChange({kind:'activity',id:'401',field:'name',value:'New game',version:s.version},s);
   await cloud.apply(change,()=>{},await cloud.preview(change));
-  await cloud.sync();
+  let triggers=0;
+  await cloud.sync(()=>{},async(target,signal)=>{triggers++;assert.deepEqual(target,{remoteId:'800',accountId:'900'});assert.equal(signal.aborted,false);assert.ok(calls.at(-1).headers.SOAPAction.includes('SetRemoteSyncRequired'));});
+  assert.equal(triggers,1);
   const ops=calls.filter(c=>c.headers.SOAPAction).map(c=>c.headers.SOAPAction.split('/').at(-1).replace('"',''));
-  assert.deepEqual(ops,['GetMyHousehold','GetMyHousehold','SimpleGetActivities','GetMyHousehold','SimpleGetActivities','SaveActivities','GetMyHousehold','SimpleGetActivities','StartCompileWithLocale','SetRemoteSyncRequired','IsRemoteSyncRequired','RegisterSuccessfulSync']);
+  assert.deepEqual(ops,['GetMyHousehold','GetMyHousehold','SimpleGetActivities','GetMyHousehold','SimpleGetActivities','SaveActivities','GetMyHousehold','SimpleGetActivities','StartCompileWithLocale','SetRemoteSyncRequired']);
   assert.ok(calls.find(c=>c.headers.SOAPAction?.includes('StartCompileWithLocale')).body.includes('<localeId>en-US</localeId>'));
-  assert.ok(calls.find(c=>c.headers.SOAPAction?.includes('RegisterSuccessfulSync')).body.includes('<accountId>900</accountId><remoteId>800</remoteId>'));
+
   cloud.close();assert.equal(cloud.cookies.size,0);assert.equal(cloud.target,null);
 });
 test('SOAP faults and authentication errors do not expose response bodies',async () => {

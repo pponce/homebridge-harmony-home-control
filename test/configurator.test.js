@@ -402,3 +402,23 @@ test('public proxy URL validates origins and generates a secure authenticated ac
   await f.server.handle({headers:{host:'harmony.example.com','x-forwarded-proto':'https'},socket:{remoteAddress:'192.0.2.90'}},{setHeader(){},writeHead(code){status=code;},end(){}});
   assert.equal(status,403,'Forwarded headers from a non-loopback peer must not be trusted');
 });
+
+test('server sync triggers selected hub before readback; only matching drafts are confirmed',async t=>{
+  const f=await serverFixture(t),host='192.0.2.70';
+  const first=await f.call('refresh',{});
+  await f.call('draft',{change:{kind:'activity',id:'401',field:'name',value:'Synced game',version:first.result.snapshot.version}});
+  await f.server.editHub(host,h=>{h.drafts[0].status='cloud-saved';});
+  const events=[],session={cloud:{target:{accountId:'900',remoteId:'800'},async sync(progress,trigger){events.push('prepare');await trigger(this.target);}},host};
+  f.server.syncer={close(){},async sync(h,target){assert.equal(h,host);assert.deepEqual(target,session.cloud.target);events.push('trigger');f.imported.resources.ActivityList.Activities[0].Name='Synced game';}};
+  f.server.reader.read=async()=>{events.push('read');return structuredClone(f.imported);};
+  f.server.job={host,status:'running'};await f.server.runSync(host,session);
+  assert.deepEqual(events,['prepare','trigger','read']);assert.equal(f.server.job.status,'complete');
+  assert.equal(f.server.store.hub(host).drafts[0].status,'hub-confirmed');
+  await f.server.editHub(host,h=>{h.drafts[0].status='cloud-saved';h.drafts[0].value='Not downloaded';});
+  f.server.job={host,status:'running'};await f.server.runSync(host,session);
+  assert.equal(f.server.store.hub(host).drafts[0].status,'cloud-saved');
+  f.server.syncer.sync=async()=>{throw new ConfiguratorError('Sync connection lost',502);};
+  events.length=0;f.server.job={host,status:'running'};await f.server.runSync(host,session);
+  assert.equal(f.server.job.status,'failed');assert.deepEqual(events,['prepare']);
+  assert.equal(f.server.store.hub(host).drafts[0].status,'cloud-saved');
+});

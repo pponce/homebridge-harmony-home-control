@@ -19,7 +19,7 @@ No build step is required to install from a Git checkout. No publishing workflow
 
 The optional child-bridge configurator is implemented in `lib/configurator/` and `configurator-web/`. Its tests cover root-free resource reads, partial coverage, stale imports, session authentication, origin/CSRF checks, private state, optimistic conflicts, XML preservation, cloud account selection, uncertain saves and sync order. Browser workflows cover import, saved setup answers, suggestions, drafts, cloud save/sync with a simulated service, and mobile/dark layouts. These fixtures do not prove compatibility with a physical Harmony hub or Logitech’s current service. See the [configurator guide](configurator.md) for the supported editing surface.
 
-Protocol research used the projects below. Implementations here are independent; no Melodious, Congruity or Terraform-provider code is vendored. Melodious informed resource/schema inspection, not the rooted local-write path. The read-only hub transport uses the stock port 8088 interface. Cloud saves preserve the complete activity XML and patch only allowlisted scalar fields.
+Protocol research used the projects below. Implementations here are independent; no Melodious, Congruity or Terraform-provider code is vendored. Melodious informed resource/schema inspection, not the rooted local-write path. Hub resource reads use the stock port 8088 interface. A separate sync transport verifies the live provisioned identity, sends the fixed `setup.sync?None` request once over WebSocket, and waits for a matching response before resource readback. Intermediate responses and unrelated notifications cannot complete the request. Timeouts, disconnects and shutdown cancel the wait without replaying the command. Cloud saves preserve the complete activity XML and patch only allowlisted scalar fields.
 
 ## References
 
@@ -39,3 +39,5 @@ Protocol research used the projects below. Implementations here are independent;
 - [Congruity MyHarmony service contracts](https://github.com/congruity/congruity)
 - [Native numeric device-control examples](https://github.com/schlambos/harmony-hub-control/blob/main/tools/hub-emu/seed/resources/DeviceList.json)
 - [Harmony NG IR output bitmask reference](https://github.com/iranl/harmony-ng/blob/44fcb46a8a38a9b6490a8049ca801649379ce4b0/docs/API.md#51-send-direct-ir-command)
+
+The local sync command and default parameters follow [aioharmony command definitions](https://github.com/Harmony-Libs/aioharmony/blob/main/src/aioharmony/const.py) and its [sync API](https://github.com/Harmony-Libs/aioharmony/blob/main/src/aioharmony/harmonyapi.py). Cloud preparation alone is not treated as hub completion; draft verification uses the imported values.
