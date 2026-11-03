@@ -4,7 +4,7 @@
 
 | Purpose | Default | Required reachability |
 | --- | --- | --- |
-| Hue HTTP | TCP 18080 | Harmony hub to Homebridge |
+| Hue HTTP | TCP 18080 | Harmony hub and pairing phone to Homebridge |
 | Roku HTTP | TCP 8060 | Harmony hub to Homebridge |
 | Discovery | UDP 1900, multicast 239.255.255.250 | Harmony discovery network |
 | Homebridge accessory access | Existing HAP ports and mDNS | This plugin to main/child bridges |
@@ -23,4 +23,4 @@ node bin/advertise.js --host=192.0.2.20 --interface=198.51.100.20 --hub=198.51.1
 
 Use `--hue-port=0` or `--roku-port=0` to advertise only one protocol. Keep the helper available if the hub needs to rediscover after a restart. No router configuration is changed by the plugin or helper. For containers, host networking is recommended.
 
-The Hue/Roku interfaces use local HTTP because these legacy control protocols require it. Device descriptors are public for discovery; accessory lists and commands require an allowed hub address, and Hue additionally requires a paired user. IP filtering assumes a trusted LAN and does not authenticate a compromised host using an allowed address. The UI’s control channel binds only to loopback and uses a random token stored with owner-only permissions. Do not expose these ports on the Internet.
+The Hue/Roku interfaces use local HTTP because these legacy control protocols require it. Device descriptors and basic Hue bridge information are public for discovery. During the two-minute pairing window, clients that can reach the Hue API may register for a key. Hue resource reads require a paired key; Hue writes additionally require a configured hub address. Roku control remains restricted to configured hubs. Discovery replies are not restricted to the hub-IP list. IP filtering assumes a trusted LAN and does not authenticate a compromised host using an allowed address. The UI’s control channel binds only to loopback and uses a random token stored with owner-only permissions. Do not expose these ports on the Internet.
