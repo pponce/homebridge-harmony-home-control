@@ -410,6 +410,17 @@
       if (!runtime.running) statusRow('Plugin status',runtime.message,'warning');
       else {
         for (const [label,message] of [['Hue bridge',runtime.hue],['Roku',runtime.roku],['Discovery',runtime.discovery]]) statusRow(label,message);
+        const discovery = runtime.discoveryDiagnostics;
+        if (discovery) {
+          statusRow('Discovery requests', `${discovery.searches} searches · ${discovery.replies} replies sent · ${discovery.sendErrors} send failures`);
+          if (discovery.lastSearch) statusRow('Last discovery request', `${discovery.lastSearch.address} · ${discovery.lastSearch.matched ? 'supported search' : 'unsupported search'}`);
+          if (discovery.lastError) statusRow('Discovery send error', discovery.lastError, 'error');
+        }
+        const pairing = runtime.pairingDiagnostic;
+        if (pairing) {
+          const results = { received: 'Request received', paired: 'Registration completed', 'window-closed': 'Pairing window closed', 'invalid-json': 'Invalid request body', 'invalid-parameters': 'Invalid registration parameters', validating: 'Checking registration', 'client-limit': 'Linked-client limit reached', 'save-failed': 'Could not save registration' };
+          statusRow('Last pairing request', `${pairing.address} · ${results[pairing.result] || 'Request received'}`, pairing.result === 'paired' ? undefined : 'warning');
+        }
         for (const message of runtime.errors || []) statusRow('Connection issue',message,'error');
         if (runtime.accessoryError) statusRow('Accessory discovery',runtime.accessoryError,'warning');
         for (const bridge of runtime.realHueBridges || []) statusRow(bridge.name,bridge.connected ? 'Connected' : bridge.error,bridge.connected ? undefined : 'warning');

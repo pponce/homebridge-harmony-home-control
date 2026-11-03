@@ -74,3 +74,62 @@ test('SSDP listener answers an actual UDP search on loopback', async t => {
   client.send(Buffer.from('M-SEARCH * HTTP/1.1\r\nMAN: "ssdp:discover"\r\nST: roku:ecp\r\n\r\n'),discovery.socket.address().port,'127.0.0.1');
   assert.match(await received,/USN: uuid:roku:ecp:TEST/);
 });
+
+test('Hue phone registration is window-limited, retry-stable and does not grant command access', async t => {
+  const f = await hueFixture(t);
+  f.config.harmonyHubAddresses = ['192.0.2.4'];
+  assert.equal((await request(f.hue.port,'/api','POST',{ devicetype: 'phone' })).value[0].error.type,101);
+  f.hue.openPairing();
+  const first = (await request(f.hue.port,'/api','POST',{ devicetype: 'phone' })).value[0].success.username;
+  const second = (await request(f.hue.port,'/api','POST',{ devicetype: 'phone' })).value[0].success.username;
+  assert.equal(first,second);
+  assert.equal((await request(f.hue.port,`/api/${first}/lights`)).value['1'].name,'Reading lamp');
+  assert.equal((await request(f.hue.port,'/api/not-paired/lights')).value[0].error.type,1);
+  assert.equal(Object.keys(f.state.data.users).length,1);
+  assert.equal(f.hue.pairingDiagnostic.result,'paired');
+  assert.ok(!JSON.stringify(f.hue.pairingDiagnostic).includes(first));
+  assert.equal((await request(f.hue.port,`/api/${first}/lights/1/state`,'PUT',{on:true})).status,403);
+  assert.equal(f.writes.length,0);
+  f.expire();
+  assert.equal((await request(f.hue.port,'/api','POST',{devicetype:'phone'})).value[0].error.type,101);
+  assert.equal(f.hue.pairingDiagnostic.result,'window-closed');
+});
+test('Hue descriptor uses consistent BSB002 model and advertised address', async t => {
+  const f = await hueFixture(t);
+  const descriptor = (await request(f.hue.port,'/description.xml')).text;
+  assert.match(descriptor, /<modelNumber>BSB002<\/modelNumber>/);
+  assert.match(descriptor, /device:Basic:1/);
+  assert.ok(descriptor.includes(`http://${f.config.advertiseAddress}:${f.hue.port}/`));
+});
+test('Hue SSDP accepts deCONZ-compatible searches from a phone outside hub allowlist', async t => {
+  const ads = hueAdvertisements({ address:'127.0.0.1',port:18080,uuid:'test-hue',bridgeId:'TEST' });
+  const discovery = new Discovery({ interfaceAddress:'127.0.0.1',hubs:['192.0.2.4'],advertisements:ads,port:0 });
+  t.after(() => discovery.close());
+  await discovery.start();
+  assert.equal(discovery.interval._idleTimeout,20000);
+  const client = createSocket('udp4'); t.after(() => client.close());
+  await new Promise(resolve => client.bind(0,'127.0.0.1',resolve));
+  const search = Buffer.from('M-SEARCH * HTTP/1.1\r\nST: upnp:rootdevice\r\n\r\n');
+  const received = new Promise((resolve,reject) => {
+    const timer = setTimeout(() => reject(new Error('Hue discovery reply timed out')),2000);
+    client.once('message',message => { clearTimeout(timer); resolve(message.toString()); });
+  });
+  client.send(search,discovery.socket.address().port,'127.0.0.1');
+  const response = await received;
+  assert.match(response,/LOCATION: http:\/\/127.0.0.1:18080\/description.xml/);
+  assert.match(response,/CACHE-CONTROL: max-age=100/);
+  assert.equal(discovery.diagnostics.lastSearch.address,'127.0.0.1');
+  assert.equal(discovery.diagnostics.searches,1);
+  assert.equal(matchSearch(Buffer.from('M-SEARCH * HTTP/1.1\r\nMAN: ssdp:discover\r\nST: ssdp:all\r\n\r\n'),ads).length,3);
+  assert.equal(matchSearch(Buffer.from('M-SEARCH * HTTP/1.1\r\nMAN: invalid\r\nST: ssdp:all\r\n\r\n'),ads).length,0);
+});
+test('SSDP send failures are surfaced without raw payloads', () => {
+  const warnings = [];
+  const discovery = new Discovery({ interfaceAddress:'192.0.2.2',hubs:[],advertisements:[],log:{warn:message => warnings.push(message)} });
+  discovery.socket = { send(buffer,port,address,callback) { callback(Object.assign(new Error('private payload'),{code:'ENETUNREACH'})); } };
+  discovery.send('private payload');
+  assert.equal(discovery.diagnostics.sendErrors,1);
+  assert.equal(discovery.diagnostics.lastError,'ENETUNREACH');
+  assert.equal(warnings.length,1);
+  assert.ok(!warnings[0].includes('private payload'));
+});
