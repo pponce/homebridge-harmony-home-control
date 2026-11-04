@@ -274,7 +274,7 @@
         const known = new Map();
         for (const s of services.filter(s => sourceKind(s) === kind)) {
           const id = bridgeId(s);
-          known.set(id,{ id, name: s.bridgeName || `Homebridge ${id.slice(-5)}`, detail: kind === 'hue' ? 'Hue bridge' : s.platforms?.length ? 'Child bridge' : 'Homebridge bridge' });
+          known.set(id,{ id, name: s.bridgeName || `Homebridge ${id.slice(-5)}`, detail: kind === 'hue' ? 'Hue bridge' : s.platforms?.length ? 'Child bridge' : s.bridgeKind === 'main' ? 'Main bridge' : 'Homebridge source' });
         }
         if (kind === 'hue') for (const bridge of config.hueBridges) known.set(bridge.id,{ id: bridge.id, name: bridge.name, detail: 'Hue bridge' });
         for (const descriptor of [...known.values()].sort((a,b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))) {
@@ -286,6 +286,7 @@
             item = { input, name, detail, count }; group.bridges.set(descriptor.id,item);
             input.onchange = () => { group.defaultChecked = [...group.bridges.values()].every(item => item.input.checked); fillServices(); };
           }
+          item.name.title = `Source ID: ${descriptor.id}`;
           item.descriptor = descriptor;
         }
         const items = [...group.bridges.values()];
