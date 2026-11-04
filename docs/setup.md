@@ -119,7 +119,7 @@ The dedicated home-control buttons use Hue, not Roku. App-launch commands are no
 
 ### 4. Check the result
 
-Use **Recent commands** in the pairing screen to see the last 30 remote commands and failures. Editor tests act directly on an accessory and do not prove discovery or pairing. Check both the physical device and the log after a remote press.
+Use **Recent commands** in the pairing screen to see the last 30 remote commands and failures. Hue entries show received control values, the mapped service and characteristics, write acceptance, and immediate readback when available. Readback is the accessory’s reported value, not independent confirmation that the physical device changed. Empty commands and mappings configured to ignore off are shown as producing no writes. Unsupported color fields return individual errors while supported on/off and brightness fields are applied. Color control is not emulated; only mappings with a brightness control advertise dimming. Editor tests act directly on an accessory and do not prove discovery or pairing. Check both the physical device and the log after a remote press.
 
 Mappings are saved in Homebridge’s normal plugin configuration. Hue numeric IDs, the emulated device identities, groups, and pairing users are stored in `harmony-home-control/state.json` under Homebridge’s storage directory. Keep that file when updating; removing it changes the identities Harmony knows. Removed light IDs are never reused. Renaming a mapping preserves its ID, while deleting and recreating it creates a new one.
 

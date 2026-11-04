@@ -133,3 +133,63 @@ test('SSDP send failures are surfaced without raw payloads', () => {
   assert.equal(warnings.length,1);
   assert.ok(!warnings[0].includes('private payload'));
 });
+
+test('mixed Hue color and dimming commands apply supported fields and report partial errors', async t => {
+  const f = await hueFixture(t), user = await f.pair();
+  const result = await request(f.hue.port,`/api/${user}/lights/1/state`,'PUT',{on:true,bri:127,hue:20000,sat:100});
+  assert.equal(f.values[11],true); assert.equal(f.values[12],50);
+  assert.equal(result.value.filter(r => r.error?.type === 6).length,2);
+  assert.ok(result.value.some(r => r.success?.['/lights/1/state/on'] === true));
+  const event = f.events.at(-1);
+  assert.equal(event.ok,false);
+  assert.match(event.message,/received on=true, bri=127, hue=20000, sat=100/);
+  assert.match(event.message,/reported true/);
+  assert.ok(!event.message.includes(user));
+  await request(f.hue.port,`/api/${user}/lights/1/state`,'PUT',{on:false,bri:254,xy:[0.1,0.2]});
+  assert.equal(f.values[11],false); assert.equal(f.values[12],100);
+  assert.deepEqual(f.writes.slice(-2).map(w => w.iid),[12,11]);
+});
+test('on-off mappings accept power alongside unsupported brightness and color', async t => {
+  const f = await hueFixture(t), user = await f.pair();
+  delete f.config.hueDevices[0].brightness;
+  const result = await request(f.hue.port,`/api/${user}/lights/1/state`,'PUT',{on:true,bri:254,ct:300});
+  assert.equal(f.values[11],true); assert.equal(f.writes.length,1);
+  assert.equal(result.value.filter(r => r.error).length,2);
+  const light = (await request(f.hue.port,`/api/${user}/lights/1`)).value;
+  assert.equal(light.type,'On/Off light'); assert.equal(light.modelid,'LOM001');
+  assert.equal(light.state.bri,undefined); assert.equal(light.state.hue,undefined);
+});
+test('no-op and mismatched readbacks are explicit rather than command success', async t => {
+  const f = await hueFixture(t), user = await f.pair();
+  await request(f.hue.port,`/api/${user}/lights/1/state`,'PUT',{transitiontime:4});
+  assert.equal(f.writes.length,0); assert.equal(f.events.at(-1).ok,false);
+  assert.match(f.events.at(-1).message,/No accessory writes/);
+  f.config.hueDevices[0].power.offValue = null;
+  await request(f.hue.port,`/api/${user}/lights/1/state`,'PUT',{on:false});
+  assert.equal(f.writes.length,0); assert.match(f.events.at(-1).message,/off is configured to do nothing/);
+  f.access.read = async () => false;
+  await request(f.hue.port,`/api/${user}/lights/1/state`,'PUT',{on:true});
+  assert.equal(f.events.at(-1).ok,false);
+  assert.match(f.events.at(-1).message,/Reported value differs/);
+});
+test('early rejection diagnostics never expose API keys or arbitrary payload values', async t => {
+  const f = await hueFixture(t), user = await f.pair();
+  const badKey = 'do-not-log-this-credential';
+  await request(f.hue.port,`/api/${badKey}/lights/1/state`,'PUT',{on:true});
+  assert.match(f.events.at(-1).message,/unknown API key/);
+  assert.ok(!JSON.stringify(f.events).includes(badKey));
+  await request(f.hue.port,`/api/${user}/lights/1/state`,'PUT',{[badKey]:badKey});
+  assert.ok(!JSON.stringify(f.events).includes(badKey));
+  f.config.harmonyHubAddresses = ['192.0.2.4'];
+  await request(f.hue.port,`/api/${user}/lights/1/state`,'PUT',{on:true});
+  assert.match(f.events.at(-1).message,/not a configured Harmony hub/);
+  assert.ok(!JSON.stringify(f.events).includes(user));
+});
+test('unavailable readback does not turn an accepted write into an API failure', async t => {
+  const f = await hueFixture(t), user = await f.pair();
+  f.access.read = async () => { throw new Error('offline'); };
+  const result = await request(f.hue.port,`/api/${user}/lights/1/state`,'PUT',{on:true});
+  assert.equal(result.value[0].success['/lights/1/state/on'],true);
+  assert.equal(f.values[11],true);
+  assert.match(f.events.at(-1).message,/readback unavailable/);
+});
