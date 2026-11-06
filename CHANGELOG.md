@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.1 — 2026-11-06
+
+### Added
+
+- `supports-hap` metadata for the Homebridge/HAP integration.
+- GitHub Sponsors and PayPal links in the README, GitHub funding configuration, and npm package metadata.
+
+See [release notes](docs/releases/0.1.1.md) for upgrade information and requirements.
+
 ## 0.1.0 — 2026-11-06
 
 First non-prerelease version.

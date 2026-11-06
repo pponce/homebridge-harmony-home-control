@@ -1,11 +1,11 @@
 {
   "name": "homebridge-harmony-home-control",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Control Hue lights and existing Homebridge accessories with a Logitech Harmony remote using one combined bridge.",
   "type": "module",
   "main": "index.js",
   "engines": { "node": ">=22.13.0", "homebridge": "^1.8.0 || ^2.0.0" },
-  "keywords": ["homebridge-plugin", "harmony", "hue", "roku", "homekit"],
+  "keywords": ["homebridge-plugin", "supports-hap", "harmony", "hue", "roku", "homekit"],
   "license": "MIT",
   "funding": [
     {
