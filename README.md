@@ -28,9 +28,6 @@ Lights down. Fan on. Settle in.
 - ✨ **Keep Apple Home tidy.** Commands go to your existing devices; the plugin creates no duplicate HomeKit accessories.
 - 🔎 **Inspect your Harmony setup.** Enable the optional [configurator](docs/configurator.md) in this plugin’s child bridge to inspect devices and activities, record HDMI/CEC details, and review changes and suggestions.
 
-> [!NOTE]
-> **Early preview (alpha).** Automated tests cover the protocols and configuration UI. Physical Harmony discovery, pairing, button behavior, and HTTP-port compatibility still need confirmation. Start with one lamp while you check your setup.
-
 ## Button ideas
 
 A few ways to make the sofa command center a little more useful:
@@ -55,7 +52,7 @@ The virtual Roku acts as a translator. **Play** can mean “turn on the fan” h
 
 ## Get started
 
-1. **Install the preview.** Follow the [GitHub installation guide](docs/setup.md#install-from-github), then open **Plugins → Harmony Home Control → Settings**.
+1. **Install the plugin.** Follow the [GitHub installation guide](docs/setup.md#install-from-github), then open **Plugins → Harmony Home Control → Settings**.
 2. **Choose your devices.** Enter your Harmony hub’s address, optionally connect real Hue bridges, and find your accessories.
 3. **Give a button its job.** Add a mapping, test it, save, and restart the plugin’s bridge. Use **Connect Harmony** to pair the virtual Hue bridge or Roku and assign your buttons.
 
