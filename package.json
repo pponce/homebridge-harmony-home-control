@@ -1,6 +1,6 @@
 {
   "name": "homebridge-harmony-home-control",
-  "version": "0.1.0-alpha.19",
+  "version": "0.1.0",
   "description": "Control Hue lights and existing Homebridge accessories with a Logitech Harmony remote using one combined bridge.",
   "type": "module",
   "main": "index.js",
@@ -10,7 +10,7 @@
   "repository": { "type": "git", "url": "https://github.com/pponce/homebridge-harmony-home-control.git" },
   "bugs": { "url": "https://github.com/pponce/homebridge-harmony-home-control/issues" },
   "homepage": "https://github.com/pponce/homebridge-harmony-home-control#readme",
-  "files": ["index.js", "lib/", "homebridge-ui/", "configurator-web/", "assets/", "docs/", "bin/", "config.schema.json", "README.md", "LICENSE"],
+  "files": ["index.js", "lib/", "homebridge-ui/", "configurator-web/", "assets/", "docs/", "bin/", "config.schema.json", "README.md", "CHANGELOG.md", "LICENSE"],
   "scripts": {
     "test": "node --test test/*.test.js",
     "check": "node bin/check.js",
