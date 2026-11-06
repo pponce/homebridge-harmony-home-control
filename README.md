@@ -100,6 +100,19 @@ Direct Hue support covers on/off and supported brightness controls, including gr
 
 </details>
 
+## Support development
+
+If Harmony Home Control makes your remote more useful, you can support its development:
+
+<p>
+  <a href="https://github.com/sponsors/pponce">
+    <img src="https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=githubsponsors&amp;logoColor=white" alt="Sponsor on GitHub">
+  </a>
+  <a href="https://paypal.me/pponcedeleon">
+    <img src="https://img.shields.io/badge/Donate-PayPal-0070BA?logo=paypal&amp;logoColor=white" alt="Donate with PayPal">
+  </a>
+</p>
+
 ## Take the next step
 
 | You want to… | Head here |
